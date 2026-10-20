@@ -99,8 +99,9 @@ function initAutoFullscreen() {
   }
 
   requestFS();
-  document.addEventListener('click', requestFS, { once: true });
-  document.addEventListener('touchstart', requestFS, { once: true });
+  window.addEventListener('click', requestFS);
+  window.addEventListener('touchstart', requestFS);
+  window.addEventListener('pointerdown', requestFS);
 }
 
 // Seamless Background Auto-Refresh upon Git Updates

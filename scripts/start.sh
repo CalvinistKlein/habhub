@@ -9,19 +9,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 PORT="${OMNIHUB_PORT:-8765}"
 APP_URL="http://localhost:${PORT}"
-LOG_DIR="${PROJECT_ROOT}/data"
-LOG_FILE="${LOG_DIR}/omnihub.log"
+DATA_DIR="${PROJECT_ROOT}/data"
+LOG_FILE="${DATA_DIR}/omnihub.log"
+KIOSK_PROFILE="${DATA_DIR}/kiosk-profile"
 
-mkdir -p "$LOG_DIR"
+mkdir -p "$DATA_DIR"
+mkdir -p "$KIOSK_PROFILE"
+
+# Remove any stale lock files from previous unclean shutdowns
+rm -f "${KIOSK_PROFILE}/Singleton"* 2>/dev/null || true
 
 echo "====================================================="
 echo "  Starting OmniHub Smart Display on Surface Go 2"
 echo "  Project Root: ${PROJECT_ROOT}"
 echo "  Target URL:   ${APP_URL}"
+echo "  Profile Dir:  ${KIOSK_PROFILE}"
 echo "====================================================="
 
 # 1. Auto-Detect Graphical Display (Wayland or X11)
-# Especially crucial when launched via SSH, TTY, or systemd
 UID_NUM=$(id -u)
 if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]; then
     echo "[Launcher] DISPLAY not set in current shell. Probing physical sessions..."
@@ -47,6 +52,7 @@ if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]; then
 fi
 
 # 2. Start Python Backend Daemon if not already running
+BACKEND_PID=""
 if ! curl -s "http://127.0.0.1:${PORT}/api/status" > /dev/null 2>&1; then
     echo "[Launcher] Starting OmniHub backend service on port ${PORT}..."
     python3 "${PROJECT_ROOT}/backend/app.py" >> "$LOG_FILE" 2>&1 &
@@ -70,8 +76,12 @@ else
 fi
 
 # Cleanup on exit
+BROWSER_PID=""
 cleanup() {
     echo "[Launcher] Shutting down OmniHub kiosk..."
+    if [ -n "$BROWSER_PID" ]; then
+        kill "$BROWSER_PID" 2>/dev/null || true
+    fi
     if [ -n "$BACKEND_PID" ]; then
         kill "$BACKEND_PID" 2>/dev/null || true
     fi
@@ -85,47 +95,77 @@ if [ -n "$DISPLAY" ] && command -v xset > /dev/null 2>&1; then
     xset s noblank 2>/dev/null || true
 fi
 
-# 4. Detect and Launch Kiosk Browser
-# Chromium / Chrome flags tailored for Surface Go 2 3:2 touchscreen (1920x1280)
-# Supports both native Wayland and X11 via --ozone-platform-hint=auto
+# 4. Detect Graphical Browser Binary
+BROWSER_BIN=""
+if command -v chromium-browser > /dev/null 2>&1; then
+    BROWSER_BIN="chromium-browser"
+elif command -v chromium > /dev/null 2>&1; then
+    BROWSER_BIN="chromium"
+elif command -v google-chrome > /dev/null 2>&1; then
+    BROWSER_BIN="google-chrome"
+elif command -v firefox > /dev/null 2>&1; then
+    BROWSER_BIN="firefox"
+fi
+
+if [ -z "$BROWSER_BIN" ]; then
+    echo "[Launcher] No graphical browser found in PATH. Server remains active at ${APP_URL}."
+    echo "[Launcher] Running in foreground (Ctrl+C to stop)..."
+    wait
+    exit 0
+fi
+
+# 5. Dedicated Kiosk Flags
+# --user-data-dir ensures an isolated profile so it NEVER opens as a tab in an existing browser session
 KIOSK_FLAGS=(
+    "--user-data-dir=${KIOSK_PROFILE}"
     "--kiosk"
+    "--app=${APP_URL}"
     "--start-fullscreen"
     "--start-maximized"
-    "--app=${APP_URL}"
     "--ozone-platform-hint=auto"
     "--no-first-run"
     "--no-default-browser-check"
     "--noerrdialogs"
     "--disable-infobars"
+    "--disable-translate"
+    "--disable-features=Translate,OptimizationHints,MediaRouter"
+    "--disable-session-crashed-bubble"
     "--check-for-update-interval=31536000"
     "--disable-pinch"
     "--overscroll-history-navigation=0"
     "--enable-features=OverlayScrollbar"
     "--touch-events=enabled"
     "--hide-scrollbars"
-    "--disable-session-crashed-bubble"
-    "--disable-features=Translate"
     "--autoplay-policy=no-user-gesture-required"
     "--password-store=basic"
+    "--class=OmniHubKiosk"
     "--window-size=1920,1280"
     "--window-position=0,0"
 )
 
-if command -v chromium-browser > /dev/null 2>&1; then
-    echo "[Launcher] Launching Chromium Browser in full kiosk mode..."
-    chromium-browser "${KIOSK_FLAGS[@]}"
-elif command -v chromium > /dev/null 2>&1; then
-    echo "[Launcher] Launching Chromium in full kiosk mode..."
-    chromium "${KIOSK_FLAGS[@]}"
-elif command -v google-chrome > /dev/null 2>&1; then
-    echo "[Launcher] Launching Google Chrome in full kiosk mode..."
-    google-chrome "${KIOSK_FLAGS[@]}"
-elif command -v firefox > /dev/null 2>&1; then
-    echo "[Launcher] Launching Firefox in kiosk mode..."
-    firefox --kiosk "${APP_URL}"
+echo "[Launcher] Launching ${BROWSER_BIN} in isolated kiosk mode..."
+if [ "$BROWSER_BIN" == "firefox" ]; then
+    firefox --kiosk "${APP_URL}" &
+    BROWSER_PID=$!
 else
-    echo "[Launcher] No graphical browser found in PATH. Server remains active at ${APP_URL}."
-    echo "[Launcher] Keep running in foreground (Ctrl+C to stop)..."
-    wait
+    "$BROWSER_BIN" "${KIOSK_FLAGS[@]}" &
+    BROWSER_PID=$!
 fi
+
+echo "[Launcher] Kiosk Browser PID: ${BROWSER_PID}"
+
+# 6. Background Fullscreen Helper (Enforces OS Taskbar & Topbar Hide)
+(
+    sleep 2
+    # Ensure window manager flags window as fullscreen
+    if [ -n "$DISPLAY" ] && command -v wmctrl > /dev/null 2>&1; then
+        wmctrl -r "OmniHub" -b add,fullscreen 2>/dev/null || true
+    fi
+    if [ -n "$DISPLAY" ] && command -v xdotool > /dev/null 2>&1; then
+        xdotool search --onlyvisible --class "OmniHubKiosk" windowactivate --sync key F11 2>/dev/null || true
+        xdotool search --onlyvisible --class "chromium" windowactivate --sync key F11 2>/dev/null || true
+    fi
+) &
+
+# Keep launcher running while browser is open
+wait "$BROWSER_PID"
