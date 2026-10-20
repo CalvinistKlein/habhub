@@ -1,0 +1,107 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --bg-pitch-black: #000000;
+  --glass-frosted: rgba(22, 22, 26, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --accent-bone: #fafaf9;
+  --accent-titanium: #d4d4d8;
+  --accent-amber: #f59e0b;
+  --accent-mint: #6ee7b7;
+}
+
+* {
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-pitch-black);
+  color: var(--accent-bone);
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Glassmorphism & Soft Flow Capsules */
+.flow-capsule {
+  background: var(--glass-frosted);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid var(--glass-border);
+  border-radius: 1.75rem;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.flow-capsule:active {
+  transform: scale(0.985);
+}
+
+.hud-shadow {
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.85);
+}
+
+/* Radar Sweep Keyframe Animations */
+@keyframes radar-beam-rotation {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.radar-sweep-beam {
+  animation: radar-beam-rotation 6s linear infinite;
+}
+
+/* Horizontal Swipable Automotive Carousel */
+.carousel-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  width: 100vw;
+  height: calc(100vh - 5.5rem);
+}
+
+.carousel-track::-webkit-scrollbar {
+  display: none;
+}
+
+.carousel-page {
+  flex: 0 0 100vw;
+  width: 100vw;
+  height: 100%;
+  scroll-snap-align: start;
+  position: relative;
+}
+
+/* Custom Sliders for Quick Settings */
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.15);
+  height: 6px;
+  border-radius: 9999px;
+  outline: none;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}

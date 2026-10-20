@@ -1,0 +1,38 @@
+# ==============================================================================
+# OmniHub Git Ignore - Data & Environment Isolation
+# ==============================================================================
+
+# User Data, Databases & Local Hardware State (NEVER overwrite via Git)
+data/
+!data/.gitkeep
+*.db
+*.db-journal
+*.sqlite3
+
+# Local Configuration & Secrets (Personal Wi-Fi, API keys, custom coordinates)
+data/config.json
+.env
+.env.local
+
+# Automated Backups & Snapshots
+data/backups/
+backups/
+
+# Logs & Cache
+data/omnihub.log
+*.log
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Local Model Weights (Downloaded separately or cached on device)
+data/models/
+*.gguf
+*.onnx
+
+# System & Editor Artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
