@@ -57,12 +57,44 @@ omnihub/
 │   │   ├── screensaver.js     # Immich photo frame & automatic contrast engine
 │   │   └── weather.js         # Weather station & radar frame updates
 │   └── index.html             # Kiosk application interface
-├── data/                      # Local SQLite database and log output
+├── data/                      # Local SQLite database and log output (GIT IGNORED)
+│   ├── omnihub.db             # Active user database
+│   ├── config.json            # User credentials & hardware config
+│   └── backups/               # Automated pre-update snapshots
 └── scripts/
     ├── start.sh               # Kiosk launcher with Chromium flags
+    ├── update.sh              # Safe Git pull, database migration & health check
+    ├── laptop_deploy.sh       # Laptop helper: Git push + instant Surface update
     ├── setup_surface.sh       # Hardware setup & audio configuration
     └── omnihub.service        # Systemd autostart unit template
 ```
+
+---
+
+## GitHub Continuous Deployment & Safe Auto-Update
+
+OmniHub includes an automated, crash-proof update system tailored for running headless on your Surface Go 2:
+
+### 1. Linking Your GitHub Repository
+On your Surface Go 2, link your GitHub repository remote:
+```bash
+git remote add origin https://github.com/<your-username>/<your-repo>.git
+git branch -M main
+```
+
+### 2. How the Surface Auto-Updates
+* **Background Git Watcher**: The Surface Go 2 backend polls your GitHub repository every 2 minutes using lightweight TLS hash checks (`git ls-remote`). It downloads zero git objects unless a new commit is detected.
+* **Online SQLite Snapshot**: Before any files are updated, SQLite natively snapshots `omnihub.db` to `data/backups/omnihub_backup_pre_update_<timestamp>.db`.
+* **Automatic Schema Migration**: If your update contains database changes, the migration runner applies new table definitions automatically without touching or wiping user rows.
+* **Instant Screen Refresh**: When the update finishes, the Surface Go 2 display reloads automatically in place without closing the kiosk browser.
+* **Automated Rollback**: If a new commit fails the local health check, the system automatically rolls back the git commit and restores the database backup.
+
+### 3. Updating Instantly from Your Laptop (2-Second Deploy)
+When you're actively developing on your laptop, you don't have to wait 2 minutes for the polling timer. Run:
+```bash
+./scripts/laptop_deploy.sh surface-go.local
+```
+This pushes your commit to GitHub and immediately pings the Surface over your local network to back up, pull, migrate, and refresh.
 
 ---
 
@@ -86,3 +118,4 @@ cp scripts/omnihub.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now omnihub.service
 ```
+
