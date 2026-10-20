@@ -55,9 +55,17 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
             self._send_json(data)
             return
 
-        elif path == "/api/radar":
-            data = weather_service.get_radar_frames()
+        elif path == "/api/weather/field":
+            data = weather_service.get_weather_field()
             self._send_json(data)
+            return
+
+        elif path == "/api/settings":
+            self._send_json({
+                "screensaver": CONFIG.get("screensaver", {}),
+                "map": CONFIG.get("map", {}),
+                "media": {"default_backdrop_mode": CONFIG.get("media", {}).get("default_backdrop_mode", "photo")},
+            })
             return
 
         elif path == "/api/media":
@@ -122,6 +130,11 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
             self._send_json(data)
             return
 
+        elif path == "/api/media/event":
+            data = media_service.handle_librespot_event(payload)
+            self._send_json(data)
+            return
+
         elif path == "/api/media/active":
             is_active = payload.get("active", True)
             data = media_service.set_active(is_active)
@@ -147,9 +160,9 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
             state = payload.get("state")
             if lat and lon:
                 if city and state:
-                    updated = weather_service.set_location(city, state, lat, lon)
+                    updated = weather_service.set_location(city, state, lat, lon, source="manual")
                 else:
-                    updated = weather_service.reverse_geocode(lat, lon)
+                    updated = weather_service.reverse_geocode(lat, lon, source="gps")
                 self._send_json({"status": "success", "location": updated})
             else:
                 self._send_json({"status": "error", "message": "latitude and longitude required"}, status_code=400)
@@ -202,6 +215,7 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-Type", mime_type)
                 self.send_header("Content-Length", str(len(content)))
+                self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
                 self.wfile.write(content)
                 return

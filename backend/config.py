@@ -57,7 +57,21 @@ DEFAULT_CONFIG = {
     # Media & Spotify Connect
     "media": {
         "spotify_connect_enabled": True,
-        "default_backdrop_mode": "photo" # "photo" or "album_art"
+        "default_backdrop_mode": "photo", # "photo" or "album_art"
+        "mpris_player": "spotifyd",       # MPRIS player name controlled via playerctl
+        "paused_grace_seconds": 60        # Keep player visible this long after pausing, then hide
+    },
+
+    # Idle behaviour: return to the photo screensaver after inactivity
+    "screensaver": {
+        "return_after_seconds": 10,
+        "photo_interval_seconds": 30
+    },
+
+    # Living map (satellite + sun lighting + weather simulation)
+    "map": {
+        "radius_miles": 100,
+        "time_lapse": 1.6  # Cloud / rain drift speed multiplier so motion is visible
     },
 
     # Immich Photo Frame
@@ -85,17 +99,25 @@ DEFAULT_CONFIG = {
 }
 
 
+def _deep_merge(base, override):
+    """Merge saved settings over defaults so new nested defaults survive upgrades."""
+    merged = json.loads(json.dumps(base))
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
 def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 saved = json.load(f)
-                config = DEFAULT_CONFIG.copy()
-                config.update(saved)
-                return config
+                return _deep_merge(DEFAULT_CONFIG, saved)
         except Exception as e:
             print(f"[Config] Error loading {CONFIG_FILE}: {e}")
-    return DEFAULT_CONFIG.copy()
+    return json.loads(json.dumps(DEFAULT_CONFIG))
 
 def save_config(config):
     try:

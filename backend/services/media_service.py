@@ -1,91 +1,174 @@
+import shutil
+import subprocess
+import threading
 import time
+
 from backend.config import CONFIG
 
+SEP = "\x1f"
+META_FORMAT = SEP.join([
+    "{{status}}", "{{xesam:title}}", "{{xesam:artist}}", "{{xesam:album}}",
+    "{{mpris:artUrl}}", "{{mpris:length}}", "{{position}}",
+])
+
+
 class MediaService:
+    """
+    Spotify Connect state + transport controls.
+
+    Primary source: MPRIS over D-Bus via `playerctl` (works with spotifyd, or any
+    Spotify Connect receiver exposing MPRIS). Secondary source: librespot's
+    --onevent hook posting to /api/media/event (state only, no controls).
+
+    The player is only reported as `visible` while music is playing, or for a
+    short grace period after pausing so it can be resumed.
+    """
+
     def __init__(self):
-        self.state = {
-            "is_active": True, # Whether Spotify Connect has an active session
-            "is_playing": True,
-            "track": "Weightless",
-            "artist": "Marconi Union • Transmissions Vol. 2",
-            "device": "Surface Go 2 • Living Room",
-            "cover_url": "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&w=600&q=80",
-            "backdrop_url": "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&w=2560&q=85",
-            "duration_seconds": 480, # 8:00
-            "position_seconds": 108, # 1:48
-            "is_dark_like_yosemite": True,
-            "last_updated": time.time()
+        self._lock = threading.Lock()
+        self.player = CONFIG.get("media", {}).get("mpris_player", "spotifyd")
+        self.grace = CONFIG.get("media", {}).get("paused_grace_seconds", 60)
+        self.has_playerctl = shutil.which("playerctl") is not None
+        self._last_poll = 0
+        self.state = self._empty_state()
+
+    def _empty_state(self):
+        return {
+            "source": "none",
+            "is_active": False,
+            "is_playing": False,
+            "visible": False,
+            "track": "",
+            "artist": "",
+            "album": "",
+            "cover_url": "",
+            "backdrop_url": "",
+            "duration_seconds": 0,
+            "position_seconds": 0,
+            "paused_at": None,
+            "last_updated": time.time(),
+            "controls_available": self.has_playerctl if hasattr(self, "has_playerctl") else False,
         }
 
+    # ------------------------------------------------------------------ playerctl
+
+    def _playerctl(self, *args, timeout=3):
+        if not self.has_playerctl:
+            return None
+        try:
+            res = subprocess.run(["playerctl", "-p", self.player, *args],
+                                 capture_output=True, text=True, timeout=timeout)
+            return res.stdout.strip() if res.returncode == 0 else None
+        except Exception:
+            return None
+
+    def _poll_mpris(self):
+        out = self._playerctl("metadata", "--format", META_FORMAT)
+        if not out:
+            # Player not running -> no session
+            if self.state["source"] == "mpris":
+                self.state.update(self._empty_state())
+            return
+        parts = (out.split(SEP) + [""] * 7)[:7]
+        status, title, artist, album, art, length_us, pos_us = parts
+        playing = status.lower() == "playing"
+        was_playing = self.state["is_playing"]
+        self.state.update({
+            "source": "mpris",
+            "is_active": status.lower() in ("playing", "paused"),
+            "is_playing": playing,
+            "track": title,
+            "artist": artist,
+            "album": album,
+            "cover_url": art,
+            "backdrop_url": art,
+            "duration_seconds": int(int(length_us or 0) / 1_000_000),
+            "position_seconds": int(int(pos_us or 0) / 1_000_000),
+            "last_updated": time.time(),
+            "controls_available": True,
+        })
+        if playing:
+            self.state["paused_at"] = None
+        elif was_playing or self.state["paused_at"] is None:
+            self.state["paused_at"] = time.time()
+
+    # ------------------------------------------------------------------ public api
+
     def get_playback_state(self):
-        # Update progressive position if playing
-        if self.state["is_playing"]:
+        with self._lock:
             now = time.time()
-            elapsed = now - self.state["last_updated"]
-            if elapsed >= 1.0:
-                self.state["position_seconds"] = min(
-                    self.state["duration_seconds"],
-                    self.state["position_seconds"] + int(elapsed)
-                )
-                self.state["last_updated"] = now
-        return self.state
+            if self.has_playerctl and now - self._last_poll > 1.0:
+                self._last_poll = now
+                self._poll_mpris()
 
-    def play(self):
-        self.state["is_playing"] = True
-        self.state["last_updated"] = time.time()
-        return self.state
+            s = self.state
+            # Advance position locally for event-hook sources
+            if s["source"] == "librespot" and s["is_playing"]:
+                elapsed = now - s["last_updated"]
+                s["position_seconds"] = min(s["duration_seconds"] or 10**9,
+                                            s["position_seconds"] + int(elapsed))
+                s["last_updated"] = now - (elapsed % 1)
 
-    def pause(self):
-        self.state["is_playing"] = False
-        return self.state
+            paused_recently = (s["paused_at"] is not None and now - s["paused_at"] < self.grace)
+            s["visible"] = bool(s["is_active"] and (s["is_playing"] or paused_recently) and s["track"])
+            return dict(s)
+
+    def handle_librespot_event(self, ev):
+        """Accepts librespot --onevent environment variables (PLAYER_EVENT, NAME, ...)."""
+        with self._lock:
+            event = (ev.get("PLAYER_EVENT") or "").lower()
+            s = self.state
+            s["source"] = "librespot"
+            if event in ("track_changed", "changed"):
+                covers = (ev.get("COVERS") or "").split("\n")
+                s.update({
+                    "track": ev.get("NAME", s["track"]),
+                    "artist": ", ".join(filter(None, (ev.get("ARTISTS") or "").split("\n"))) or s["artist"],
+                    "album": ev.get("ALBUM", s["album"]),
+                    "cover_url": covers[0] if covers and covers[0] else s["cover_url"],
+                    "backdrop_url": covers[0] if covers and covers[0] else s["backdrop_url"],
+                    "duration_seconds": int(int(ev.get("DURATION_MS") or 0) / 1000),
+                })
+            if event in ("playing", "started"):
+                s["is_active"] = True
+                s["is_playing"] = True
+                s["paused_at"] = None
+            elif event == "paused":
+                s["is_playing"] = False
+                s["paused_at"] = time.time()
+            elif event in ("stopped", "session_disconnected"):
+                self.state = self._empty_state()
+                return self.state
+            if ev.get("POSITION_MS"):
+                s["position_seconds"] = int(int(ev["POSITION_MS"]) / 1000)
+            s["last_updated"] = time.time()
+            return dict(s)
+
+    def _control(self, *args):
+        if self._playerctl(*args) is None and not self.has_playerctl:
+            print(f"[MediaService] Control '{' '.join(args)}' unavailable (install playerctl + spotifyd).")
+        self._last_poll = 0
+        time.sleep(0.25)
+        return self.get_playback_state()
 
     def toggle_playback(self):
-        self.state["is_playing"] = not self.state["is_playing"]
-        self.state["last_updated"] = time.time()
-        return self.state
+        return self._control("play-pause")
 
     def next_track(self):
-        if self.state["track"] == "Weightless":
-            self.state.update({
-                "track": "Dayvan Cowboy",
-                "artist": "Boards of Canada • The Campfire Headphase",
-                "cover_url": "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=600&q=80",
-                "backdrop_url": "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=2560&q=85",
-                "duration_seconds": 301,
-                "position_seconds": 0,
-                "is_dark_like_yosemite": False,
-                "last_updated": time.time()
-            })
-        else:
-            self.state.update({
-                "track": "Weightless",
-                "artist": "Marconi Union • Transmissions Vol. 2",
-                "cover_url": "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&w=600&q=80",
-                "backdrop_url": "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&w=2560&q=85",
-                "duration_seconds": 480,
-                "position_seconds": 0,
-                "is_dark_like_yosemite": True,
-                "last_updated": time.time()
-            })
-        return self.state
+        return self._control("next")
 
     def previous_track(self):
-        if self.state["position_seconds"] > 5:
-            self.state["position_seconds"] = 0
-        else:
-            return self.next_track()
-        self.state["last_updated"] = time.time()
-        return self.state
+        return self._control("previous")
 
     def seek_relative(self, seconds):
-        self.state["position_seconds"] = max(
-            0, min(self.state["duration_seconds"], self.state["position_seconds"] + seconds)
-        )
-        self.state["last_updated"] = time.time()
-        return self.state
+        seconds = int(seconds)
+        return self._control("position", f"{abs(seconds)}{'+' if seconds >= 0 else '-'}")
 
     def set_active(self, is_active):
-        self.state["is_active"] = is_active
-        return self.state
+        with self._lock:
+            if not is_active:
+                self.state = self._empty_state()
+        return self.get_playback_state()
+
 
 media_service = MediaService()

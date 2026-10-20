@@ -1,14 +1,14 @@
-// OmniHub Weather & Dynamic Geolocation Controller
+// OmniHub Weather & Forecast Controller
+
+window.currentWeatherData = null;
 
 async function initWeather() {
-  // 1. Try browser-level geolocation first for high accuracy
   detectBrowserLocation();
-
-  // 2. Fetch weather and radar loops
   fetchWeatherData();
-  fetchRadarFrames();
-  setInterval(fetchWeatherData, 300000); // 5 min
-  setInterval(fetchRadarFrames, 300000);
+  fetchWeatherGrid();
+
+  setInterval(fetchWeatherData, 300000); // 5 mins
+  setInterval(fetchWeatherGrid, 300000);
 }
 
 function detectBrowserLocation() {
@@ -18,7 +18,6 @@ function detectBrowserLocation() {
         try {
           const lat = pos.coords.latitude;
           const lon = pos.coords.longitude;
-          console.log(`[Location] Browser GPS detected: ${lat}, ${lon}`);
           const res = await fetch('/api/location', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -26,14 +25,11 @@ function detectBrowserLocation() {
           });
           if (res.ok) {
             fetchWeatherData();
+            fetchWeatherGrid();
           }
-        } catch (e) {
-          console.log("[Location] Error posting GPS coordinates:", e);
-        }
+        } catch (e) {}
       },
-      (err) => {
-        console.log("[Location] Browser geolocation unavailable, using IP geolocation:", err.message);
-      },
+      (err) => {},
       { timeout: 7000, maximumAge: 600000 }
     );
   }
@@ -44,64 +40,106 @@ async function fetchWeatherData() {
     const res = await fetch('/api/weather');
     if (res.ok) {
       const data = await res.json();
-      updateWeatherDisplay(data);
+      window.currentWeatherData = data;
+      renderWeather(data);
+
+      // Inform living map
+      if (data.location && window.LivingMap) {
+        window.LivingMap.setLocation(
+          data.location.latitude,
+          data.location.longitude,
+          data.location.city || "Local Area"
+        );
+      }
     }
   } catch (e) {
-    console.log("[Weather] Using local telemetry fallback");
+    console.log("[Weather] Fetch error:", e);
   }
 }
 
-async function fetchRadarFrames() {
+async function fetchWeatherGrid() {
   try {
-    const res = await fetch('/api/radar');
+    const res = await fetch('/api/weather/field');
     if (res.ok) {
-      const data = await res.json();
-      console.log("[Radar] RainViewer frames loaded", data.host);
+      const field = await res.json();
+      document.dispatchEvent(new CustomEvent('livingmap:field', { detail: field }));
     }
   } catch (e) {}
 }
 
-function updateWeatherDisplay(data) {
+function renderWeather(data) {
   if (!data || !data.current) return;
-  const current = data.current;
-  const tempF = Math.round(current.temperature_2m || 68);
-  const feelsLike = Math.round(current.apparent_temperature || tempF);
-  const humidity = Math.round(current.relative_humidity_2m || 65);
-  const windMph = Math.round(current.wind_speed_10m || 7);
+  const cur = data.current;
+  const temp = Math.round(cur.temperature_2m);
+  const feels = Math.round(cur.apparent_temperature || temp);
+  const code = cur.weather_code ?? 0;
+  const isDay = cur.is_day ?? 1;
 
-  // Dynamic Location Resolution
+  const desc = window.OHIcons ? window.OHIcons.describe(code, isDay) : { label: 'Clear', icon: '' };
+
+  // 1. Consolidated Weather Card on Dashboard
+  const tempEl = document.getElementById('wc-temp');
+  const condEl = document.getElementById('wc-cond');
+  const iconEl = document.getElementById('wc-icon');
+  const metaEl = document.getElementById('wc-meta');
+
+  if (tempEl) tempEl.innerHTML = `${temp}&deg;`;
+  if (condEl) condEl.textContent = desc.label;
+  if (iconEl && desc.icon) iconEl.innerHTML = desc.icon;
+
+  const humidity = Math.round(cur.relative_humidity_2m || 50);
+  const windMph = Math.round(cur.wind_speed_10m || 5);
   const loc = data.location || {};
   const city = loc.city || "Local";
   const state = loc.state || "";
-  const locationLabel = state ? `${city}, ${state}` : city;
+  const placeStr = state ? `${city}, ${state}` : city;
 
-  // Update Main Dashboard Weather Capsule
-  const mainTemp = document.getElementById('main-weather-temp');
-  const mainDesc = document.getElementById('main-weather-desc');
-  const mainHum = document.getElementById('main-weather-humidity');
-  const mainWind = document.getElementById('main-weather-wind');
+  if (metaEl) {
+    metaEl.textContent = `Feels like ${feels}° · Humidity ${humidity}% · Wind ${windMph} mph`;
+  }
 
-  if (mainTemp) mainTemp.innerHTML = `${tempF}°<span class="text-2xl text-stone-400 font-normal">F</span>`;
-  if (mainDesc) mainDesc.textContent = `Feels like ${feelsLike}°`;
-  if (mainHum) mainHum.textContent = `${humidity}%`;
-  if (mainWind) mainWind.textContent = `${windMph} mph NE`;
+  // 2. Next 4 Hours Forecast in Weather Card
+  const hoursContainer = document.getElementById('wc-hours');
+  if (hoursContainer && data.hourly && data.hourly.time) {
+    hoursContainer.innerHTML = '';
+    const nowSec = Math.floor(Date.now() / 1000);
+    let startIndex = 0;
 
-  // Update Location Headers
-  const dateLocationEl = document.getElementById('main-date-location');
-  if (dateLocationEl) {
+    for (let i = 0; i < data.hourly.time.length; i++) {
+      if (data.hourly.time[i] >= nowSec) {
+        startIndex = i;
+        break;
+      }
+    }
+
+    const nextHours = [startIndex + 1, startIndex + 2, startIndex + 3, startIndex + 4];
+    nextHours.forEach((idx) => {
+      if (!data.hourly.time[idx]) return;
+      const t = new Date(data.hourly.time[idx] * 1000);
+      let hourStr = t.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+      const hTemp = Math.round(data.hourly.temperature_2m[idx]);
+      const hCode = data.hourly.weather_code[idx] ?? 0;
+      const hIsDay = data.hourly.is_day ? data.hourly.is_day[idx] : 1;
+      const hDesc = window.OHIcons ? window.OHIcons.describe(hCode, hIsDay) : { icon: '' };
+      const hPop = data.hourly.precipitation_probability ? data.hourly.precipitation_probability[idx] : 0;
+
+      const col = document.createElement('div');
+      col.className = 'wc-hour';
+      col.innerHTML = `
+        <div class="h">${hourStr}</div>
+        ${hDesc.icon || ''}
+        <div class="t">${hTemp}&deg;</div>
+        <div class="p">${hPop > 15 ? hPop + '%' : ''}</div>
+      `;
+      hoursContainer.appendChild(col);
+    });
+  }
+
+  // 3. Update Screensaver Weather Line
+  const ssWeatherLine = document.getElementById('ss-weather-line');
+  if (ssWeatherLine) {
     const today = new Date();
-    const dayStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-    dateLocationEl.textContent = `${dayStr} • ${city} Metro`;
-  }
-
-  const radarPill = document.getElementById('radar-station-pill');
-  if (radarPill) {
-    radarPill.textContent = `NEXRAD LIVE RADAR • ${city.toUpperCase()} METRO`;
-  }
-
-  // Update Immich Screensaver Weather Label
-  const immichWeatherTemp = document.getElementById('immich-weather-temp');
-  if (immichWeatherTemp) {
-    immichWeatherTemp.textContent = `${city}: ${tempF}°F`;
+    const dayStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    ssWeatherLine.textContent = `${dayStr} · ${placeStr} · ${temp}°F ${desc.label}`;
   }
 }

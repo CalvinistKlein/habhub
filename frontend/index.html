@@ -1,755 +1,191 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>OmniHub Smart Display</title>
-  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <title>OmniHub</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
-<body class="bg-black text-stone-100 antialiased select-none overflow-hidden h-screen w-screen flex flex-col justify-between">
+<body class="mode-split">
 
-  <!-- ================= MASTER HORIZONTAL SWIPABLE CAROUSEL ================= -->
-  <main id="carousel" class="carousel-track relative z-10">
+  <!-- ===================================================================
+       ANDROID AUTO / CARPLAY DYNAMIC GRID STAGE
+       =================================================================== -->
+  <div id="stage" class="stage">
 
-    <!-- ================= PAGE 0: RADAR OVERVIEW (HOME) ================= -->
-    <section class="carousel-page p-8 flex flex-col justify-between overflow-hidden" data-index="0">
-      
-      <!-- BACKGROUND: FULL-BLEED SATELLITE TERRAIN WITH ANIMATED LIVE DOPPLER RADAR -->
-      <div class="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-        <svg class="w-full h-full object-cover" viewBox="0 0 1920 1280" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <radialGradient id="storm-core" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#d97706" stop-opacity="0.95" />
-              <stop offset="40%" stop-color="#10b981" stop-opacity="0.80" />
-              <stop offset="85%" stop-color="#047857" stop-opacity="0.45" />
-              <stop offset="100%" stop-color="#047857" stop-opacity="0" />
-            </radialGradient>
-            <radialGradient id="storm-secondary" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stop-color="#10b981" stop-opacity="0.75" />
-              <stop offset="70%" stop-color="#047857" stop-opacity="0.35" />
-              <stop offset="100%" stop-color="#047857" stop-opacity="0" />
-            </radialGradient>
-            <linearGradient id="sweep-cone" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="rgba(255,255,255,0.22)" />
-              <stop offset="100%" stop-color="rgba(255,255,255,0)" />
-            </linearGradient>
-          </defs>
+    <!-- HERO CARD: LIVING MAP & ATMOSPHERE (Tap to expand/restore) -->
+    <section id="card-map" class="card card-map" onclick="toggleMapFocus(event)">
+      <div id="sat-tiles"></div>
+      <canvas id="light-canvas"></canvas>
+      <div id="night-tiles"></div>
+      <div id="sun-sheen"></div>
+      <canvas id="sky-canvas"></canvas>
+      <div class="map-vignette"></div>
 
-          <!-- Satellite Topo Land Contours -->
-          <rect width="1920" height="1280" fill="#0c0d10"/>
-          <path d="M-100,200 Q400,100 800,450 T1920,400 L1920,1280 L-100,1280 Z" fill="#121318" opacity="0.9"/>
-          <path d="M-50,600 Q500,550 950,850 T2000,750 L2000,1280 L-50,1280 Z" fill="#16171f" opacity="0.85"/>
-          <path d="M100,900 Q700,850 1200,1100 T2100,1000 L2100,1280 L100,1280 Z" fill="#1b1c24" opacity="0.75"/>
-
-          <!-- Range Distance Rings -->
-          <circle cx="960" cy="640" r="200" fill="none" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1.5" stroke-dasharray="3 6"/>
-          <circle cx="960" cy="640" r="420" fill="none" stroke="rgba(255, 255, 255, 0.06)" stroke-width="1.5"/>
-          <circle cx="960" cy="640" r="680" fill="none" stroke="rgba(255, 255, 255, 0.04)" stroke-width="1.5"/>
-
-          <!-- Crosshairs -->
-          <line x1="960" y1="0" x2="960" y2="1280" stroke="rgba(255, 255, 255, 0.04)" stroke-width="1"/>
-          <line x1="0" y1="640" x2="1920" y2="640" stroke="rgba(255, 255, 255, 0.04)" stroke-width="1"/>
-
-          <!-- Animated Doppler Reflectivity Storm Blobs -->
-          <ellipse cx="800" cy="560" rx="380" ry="250" fill="url(#storm-core)" filter="blur(32px)"/>
-          <ellipse cx="1420" cy="790" rx="280" ry="190" fill="url(#storm-secondary)" filter="blur(26px)"/>
-
-          <!-- Sweeping Radar Beam -->
-          <g class="radar-sweep-beam" style="transform-origin: 960px 640px;">
-            <path d="M 960 640 L 1920 440 A 960 960 0 0 1 1920 640 Z" fill="url(#sweep-cone)"/>
-            <line x1="960" y1="640" x2="1920" y2="640" stroke="rgba(255, 255, 255, 0.35)" stroke-width="1.5"/>
-          </g>
-
-          <!-- City Vector Labels -->
-          <text x="980" y="635" fill="rgba(255,255,255,0.6)" font-family="sans-serif" font-size="13" font-weight="500">Austin Downtown (KAUS NEXRAD)</text>
-          <text x="1300" y="440" fill="rgba(255,255,255,0.3)" font-family="sans-serif" font-size="12">Round Rock</text>
-          <text x="700" y="860" fill="rgba(255,255,255,0.3)" font-family="sans-serif" font-size="12">San Marcos</text>
-        </svg>
-
-        <!-- Subtle Contrast Vignette -->
-        <div class="absolute inset-0 bg-radial from-transparent via-black/25 to-black/75"></div>
+      <!-- You are here pulse marker -->
+      <div id="you-marker"><div class="dot"></div><div class="label" id="marker-label">Locating...</div></div>
+      <div class="map-badge" id="map-badge">
+        <span class="badge-dot"></span>
+        <span id="map-badge-text">100-MILE LIVE SATELLITE</span>
       </div>
 
-      <!-- FOREGROUND CONTENT: TOP 65% IS OPEN RADAR MAP, ALL TEXT ANCHORED AT BOTTOM -->
-      <div class="relative z-10 flex flex-col justify-between h-full">
+      <!-- Floating Map Clock & Subtitle (Bottom-Left) -->
+      <div class="map-hud-overlay">
+        <div class="clock" data-clock><span class="hm">--:--</span><span class="ampm"></span></div>
+        <div class="subline" data-date-line>&nbsp;</div>
+      </div>
+
+      <!-- Expand / Restore Floating Indicator Pill -->
+      <button class="expand-pill" id="map-expand-btn" aria-label="Toggle full screen map" onclick="toggleMapFocus(event)">
+        <svg class="icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+        <svg class="icon-collapse hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7"/></svg>
+        <span id="expand-pill-label">Full Map</span>
+      </button>
+    </section>
+
+    <!-- RIGHT CONTEXT STACK: ADAPTIVE WIDGET CARDS -->
+    <aside id="context-stack" class="context-stack">
+
+      <!-- CONSOLIDATED WEATHER WIDGET -->
+      <section id="card-weather" class="card card-weather" onclick="event.stopPropagation()">
+        <div class="wc-top">
+          <div class="wc-icon" id="wc-icon"></div>
+          <div>
+            <div class="wc-temp" id="wc-temp">--&deg;</div>
+            <div class="wc-cond" id="wc-cond">Loading...</div>
+          </div>
+        </div>
+        <div class="wc-meta" id="wc-meta">&nbsp;</div>
+        <div class="wc-hours" id="wc-hours"></div>
+      </section>
+
+      <!-- SPOTIFY CONNECT CARD (Auto-collapses when not playing) -->
+      <section id="card-spotify" class="card card-spotify hidden" onclick="event.stopPropagation()">
+        <div class="sp-header">
+          <span class="sp-tag"><i class="pulse-dot"></i> SPOTIFY CONNECT</span>
+          <span class="sp-device" id="sp-device-label">Surface Go 2</span>
+        </div>
         
-        <!-- TOP: FLOATING RADAR STATUS & LEGEND PILL -->
-        <div class="flex items-center justify-between w-full pt-1">
-          <div class="inline-flex items-center space-x-2.5 px-4 py-2 rounded-full bg-black/60 border border-white/10 backdrop-blur-md text-xs font-mono text-stone-300">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span id="radar-station-pill">NEXRAD LIVE RADAR • LOCAL METRO</span>
-          </div>
-          <!-- dBZ Reflectivity Scale Legend Pill -->
-          <div class="inline-flex items-center space-x-3 px-4 py-2 rounded-full bg-black/60 border border-white/10 backdrop-blur-md text-xs font-mono text-stone-300">
-            <span class="text-stone-400">dBZ:</span>
-            <div class="flex items-center h-2.5 w-32 rounded-full overflow-hidden" style="background: linear-gradient(to right, #047857, #10b981, #d97706, #dc2626, #7c3aed);"></div>
-            <span class="text-stone-400">10–65+</span>
+        <div class="sp-body">
+          <img id="hp-cover" class="sp-art" alt="Album Cover">
+          <div class="sp-details">
+            <div class="sp-title" id="hp-title">--</div>
+            <div class="sp-artist" id="hp-artist">--</div>
           </div>
         </div>
 
-        <!-- MIDDLE IS 100% UNOBSTRUCTED LIVE SATELLITE TERRAIN & DOPPLER SWEEP -->
-        <div class="flex-1"></div>
-
-        <!-- BOTTOM STACK: CLOCK, WEATHER & QUICK ACTION CAPSULES -->
-        <div class="space-y-4 pb-2">
-          
-          <!-- Bottom Row 1: Oversized Clock, Inbound Alert & Weather Hero -->
-          <div class="grid grid-cols-12 gap-6 items-end">
-            
-            <!-- Hero Clock & Date -->
-            <div class="col-span-7 hud-shadow">
-              <div class="flex items-center space-x-2 text-sm font-medium tracking-wider text-stone-400 uppercase">
-                <span class="w-2 h-2 rounded-full bg-emerald-400/90 animate-pulse"></span>
-                <span id="main-date-location">Sunday, October 18 • Austin Metro</span>
-              </div>
-              
-              <div id="main-clock-digits" class="text-[7rem] font-light tracking-tight text-white leading-none mt-1">
-                10:42<span class="text-4xl text-stone-500 font-normal ml-3">PM</span>
-              </div>
-
-              <!-- Inbound Rain Radar Alert Capsule -->
-              <div class="mt-3 inline-flex items-center space-x-3 px-5 py-2.5 rounded-full bg-stone-900/80 border border-stone-700/60 text-stone-200 backdrop-blur-md">
-                <svg class="w-5 h-5 text-stone-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15zm5 5l-1 2m4-2l-1 2m4-2l-1 2"></path></svg>
-                <div class="text-sm font-normal">
-                  <strong class="text-white">Light rain inbound in 18 minutes</strong> • Moving NE at 14 mph (42 dBZ)
-                </div>
-              </div>
-            </div>
-
-            <!-- Weather Hero Capsule -->
-            <div onclick="scrollToPage(1)" class="col-span-5 flow-capsule p-5 cursor-pointer group">
-              <div class="flex items-start justify-between">
-                <div>
-                  <div class="text-xs uppercase tracking-wider text-stone-400 font-medium">Current Weather</div>
-                  <div id="main-weather-temp" class="text-5xl font-light text-white mt-1">68°<span class="text-2xl text-stone-400 font-normal">F</span></div>
-                  <div id="main-weather-desc" class="text-sm text-stone-300 font-normal mt-0.5">Light Rain • Feels like 67°</div>
-                </div>
-                
-                <div class="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-stone-200">
-                  <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 14.5a3.5 3.5 0 00-3.5-3.5h-.7a5.5 5.5 0 00-10.8 1.5A3.5 3.5 0 004.5 19H19a2 2 0 000-4.5zm-11 5l-1 2m4-2l-1 2m4-2l-1 2"></path></svg>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-stone-800 text-xs">
-                <div>
-                  <span class="text-stone-500 block">Humidity</span>
-                  <span id="main-weather-humidity" class="text-sm font-medium text-white">65%</span>
-                </div>
-                <div>
-                  <span class="text-stone-500 block">Wind</span>
-                  <span id="main-weather-wind" class="text-sm font-medium text-white">7 mph NE</span>
-                </div>
-                <div>
-                  <span class="text-stone-500 block">Air Quality</span>
-                  <span class="text-sm font-medium text-emerald-400">28 (Good)</span>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          <!-- Bottom Row 2: Flowy Quick Action Capsules -->
-          <div class="grid grid-cols-12 gap-5" id="home-bottom-row">
-            
-            <!-- Capsule: Alarm Pill -->
-            <div onclick="scrollToPage(4)" id="home-alarm-capsule" class="col-span-4 flow-capsule p-4 cursor-pointer flex items-center space-x-4 transition-all duration-300">
-              <div class="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-300 flex-shrink-0">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0zM7 3L3 7m14-4l4 4"></path></svg>
-              </div>
-              <div>
-                <div class="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Tomorrow Morning</div>
-                <div class="text-xl font-light text-white">6:30 AM</div>
-                <div class="text-[11px] text-stone-400">Piper Briefing Active</div>
-              </div>
-            </div>
-
-            <!-- Capsule: Quick Lights Control -->
-            <div id="home-lights-capsule" class="col-span-4 flow-capsule p-4 flex items-center justify-between transition-all duration-300">
-              <div class="flex items-center space-x-3">
-                <div class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-stone-200 flex-shrink-0">
-                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
-                </div>
-                <div>
-                  <div class="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Living Room</div>
-                  <div class="text-sm font-medium text-white">Ceiling Array</div>
-                  <div class="text-[11px] text-stone-400">85% Brightness</div>
-                </div>
-              </div>
-              <button onclick="toggleLightPill(this)" class="px-4 py-2 rounded-full bg-white text-stone-900 font-bold text-xs shadow-md">ON</button>
-            </div>
-
-            <!-- Capsule: Spotify Media Capsule (Auto-hiding if not in use) -->
-            <div onclick="scrollToPage(3)" id="home-spotify-capsule" class="col-span-4 flow-capsule p-4 cursor-pointer flex items-center justify-between transition-all duration-300">
-              <div class="flex items-center space-x-3 truncate">
-                <div class="w-12 h-12 rounded-2xl bg-stone-800 border border-stone-700 flex items-center justify-center text-stone-300 shadow-md flex-shrink-0">
-                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>
-                </div>
-                <div class="truncate">
-                  <div class="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Spotify Connect</div>
-                  <div class="text-sm font-medium text-white truncate">Weightless</div>
-                  <div class="text-[11px] text-stone-400 truncate">Marconi Union</div>
-                </div>
-              </div>
-              <button onclick="toggleMusicPlayback(event)" class="w-10 h-10 rounded-full bg-stone-200 text-stone-900 flex items-center justify-center font-bold flex-shrink-0 hover:scale-105 transition">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
-              </button>
-            </div>
-
-          </div>
-
-        </div>
-
-      </div>
-
-    </section>
-
-    <!-- ================= PAGE 1: WEATHER PRO DASHBOARD ================= -->
-    <section class="carousel-page p-8 flex flex-col justify-between overflow-hidden" data-index="1">
-      <div class="flex items-center justify-between border-b border-stone-800 pb-4">
-        <div class="flex items-center space-x-5">
-          <div class="w-16 h-16 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center text-stone-200">
-            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 14.5a3.5 3.5 0 00-3.5-3.5h-.7a5.5 5.5 0 00-10.8 1.5A3.5 3.5 0 004.5 19H19a2 2 0 000-4.5zm-11 5l-1 2m4-2l-1 2m4-2l-1 2"></path></svg>
-          </div>
-          <div>
-            <h2 class="text-3xl font-light text-white">Austin Weather Station</h2>
-            <div class="text-sm text-stone-400 mt-1">High-Resolution Open-Meteo & NEXRAD Doppler Composite</div>
-          </div>
-        </div>
-        <div class="text-right">
-          <div class="text-6xl font-light text-white">68°<span class="text-2xl text-stone-400">F</span></div>
-          <div class="text-sm text-stone-400">High: 74° • Low: 58° • Dew Point: 53°</div>
-        </div>
-      </div>
-
-      <!-- Oversized Hourly Scrubber -->
-      <div class="flow-capsule p-6 my-4">
-        <div class="flex justify-between text-xs font-medium uppercase tracking-wider text-stone-400 mb-4">
-          <span>24-Hour Precipitation & Temperature Curve</span>
-          <span>Open-Meteo Telemetry</span>
-        </div>
-        <div class="grid grid-cols-8 gap-4 text-center">
-          <div class="p-3 rounded-2xl bg-white/5 border border-white/10">
-            <div class="text-xs text-stone-400">Now</div>
-            <div class="text-2xl font-light text-white my-1">68°</div>
-            <div class="text-xs text-amber-300 font-medium">80% Rain</div>
-          </div>
-          <div class="p-3 rounded-2xl bg-white/5">
-            <div class="text-xs text-stone-400">12 AM</div>
-            <div class="text-2xl font-light text-white my-1">66°</div>
-            <div class="text-xs text-amber-300 font-medium">65%</div>
-          </div>
-          <div class="p-3 rounded-2xl bg-white/5">
-            <div class="text-xs text-stone-400">1 AM</div>
-            <div class="text-2xl font-light text-white my-1">65°</div>
-            <div class="text-xs text-stone-400">30%</div>
-          </div>
-          <div class="p-3 rounded-2xl bg-white/5">
-            <div class="text-xs text-stone-400">2 AM</div>
-            <div class="text-2xl font-light text-white my-1">63°</div>
-            <div class="text-xs text-stone-400">15%</div>
-          </div>
-          <div class="p-3 rounded-2xl bg-white/5">
-            <div class="text-xs text-stone-400">3 AM</div>
-            <div class="text-2xl font-light text-white my-1">62°</div>
-            <div class="text-xs text-stone-400">10%</div>
-          </div>
-          <div class="p-3 rounded-2xl bg-white/5">
-            <div class="text-xs text-stone-400">4 AM</div>
-            <div class="text-2xl font-light text-white my-1">60°</div>
-            <div class="text-xs text-stone-400">5%</div>
-          </div>
-          <div class="p-3 rounded-2xl bg-white/5">
-            <div class="text-xs text-stone-400">5 AM</div>
-            <div class="text-2xl font-light text-white my-1">59°</div>
-            <div class="text-xs text-stone-400">0%</div>
-          </div>
-          <div class="p-3 rounded-2xl bg-white/5">
-            <div class="text-xs text-stone-400">6 AM</div>
-            <div class="text-2xl font-light text-white my-1">58°</div>
-            <div class="text-xs text-stone-400">0%</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 7-Day Forecast Grid -->
-      <div class="grid grid-cols-7 gap-4">
-        <div class="flow-capsule p-4 text-center">
-          <div class="text-xs text-stone-400 font-medium">Sun</div>
-          <div class="text-xl font-light text-white my-2">74°/58°</div>
-          <div class="text-xs text-amber-300 font-medium">Showers</div>
-        </div>
-        <div class="flow-capsule p-4 text-center">
-          <div class="text-xs text-stone-400 font-medium">Mon</div>
-          <div class="text-xl font-light text-white my-2">78°/55°</div>
-          <div class="text-xs text-stone-300">Partly Cloudy</div>
-        </div>
-        <div class="flow-capsule p-4 text-center">
-          <div class="text-xs text-stone-400 font-medium">Tue</div>
-          <div class="text-xl font-light text-white my-2">81°/59°</div>
-          <div class="text-xs text-stone-300">Clear</div>
-        </div>
-        <div class="flow-capsule p-4 text-center">
-          <div class="text-xs text-stone-400 font-medium">Wed</div>
-          <div class="text-xl font-light text-white my-2">83°/62°</div>
-          <div class="text-xs text-stone-300">Sunny</div>
-        </div>
-        <div class="flow-capsule p-4 text-center">
-          <div class="text-xs text-stone-400 font-medium">Thu</div>
-          <div class="text-xl font-light text-white my-2">79°/60°</div>
-          <div class="text-xs text-stone-300">Overcast</div>
-        </div>
-        <div class="flow-capsule p-4 text-center">
-          <div class="text-xs text-stone-400 font-medium">Fri</div>
-          <div class="text-xl font-light text-white my-2">75°/54°</div>
-          <div class="text-xs text-stone-300">Breezy</div>
-        </div>
-        <div class="flow-capsule p-4 text-center">
-          <div class="text-xs text-stone-400 font-medium">Sat</div>
-          <div class="text-xl font-light text-white my-2">77°/56°</div>
-          <div class="text-xs text-stone-300">Clear</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================= PAGE 2: HOME CONTROL ================= -->
-    <section class="carousel-page p-8 flex flex-col justify-between overflow-hidden" data-index="2">
-      <div class="border-b border-stone-800 pb-4">
-        <h2 class="text-3xl font-light text-white">Smart Home & Ambient Lighting</h2>
-        <div class="text-sm text-stone-400 mt-1">Direct LAN Home Assistant & Matter Devices</div>
-      </div>
-
-      <div class="grid grid-cols-3 gap-6 my-auto">
-        <div class="flow-capsule p-6 flex flex-col justify-between h-56">
-          <div class="flex items-center justify-between">
-            <div class="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-stone-200">
-              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
-            </div>
-            <button onclick="toggleLightPill(this)" class="px-6 py-2.5 rounded-full bg-white text-stone-900 font-bold text-xs shadow-md">ON</button>
-          </div>
-          <div>
-            <div class="text-lg font-medium text-white">Living Room Array</div>
-            <div class="text-sm text-stone-400">85% Warm White</div>
-          </div>
-          <input type="range" class="w-full accent-white" value="85">
-        </div>
-
-        <div class="flow-capsule p-6 flex flex-col justify-between h-56">
-          <div class="flex items-center justify-between">
-            <div class="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-stone-200">
-              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-            </div>
-            <span class="px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono font-bold">LOCKED</span>
-          </div>
-          <div>
-            <div class="text-lg font-medium text-white">Front Door Deadbolt</div>
-            <div class="text-sm text-stone-400">Battery 94% • Matter Thread</div>
-          </div>
-          <div class="text-xs text-stone-500">Auto-lock active after 5 minutes</div>
-        </div>
-
-        <div class="flow-capsule p-6 flex flex-col justify-between h-56">
-          <div class="flex items-center justify-between">
-            <div class="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-stone-200">
-              <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-            </div>
-            <div class="text-2xl font-light text-white">71°<span class="text-sm text-stone-400">F</span></div>
-          </div>
-          <div>
-            <div class="text-lg font-medium text-white">Nest Thermostat</div>
-            <div class="text-sm text-stone-400">Eco Mode • Idle</div>
-          </div>
-          <div class="flex items-center justify-between">
-            <button class="w-10 h-10 rounded-full bg-white/10 text-white font-bold">-</button>
-            <span class="text-xs text-stone-400 font-mono">Set to 71°</span>
-            <button class="w-10 h-10 rounded-full bg-white/10 text-white font-bold">+</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between text-xs text-stone-400 pt-4 border-t border-stone-800">
-        <span>Connected to Home Assistant • WebSocket API Active</span>
-        <button class="text-white hover:underline">Manage Entites</button>
-      </div>
-    </section>
-
-    <!-- ================= PAGE 3: FULL MEDIA VIEW ================= -->
-    <section class="carousel-page p-8 flex flex-col justify-between overflow-hidden" data-index="3">
-      <div class="flex items-center justify-between border-b border-stone-800 pb-4">
-        <div>
-          <h2 class="text-3xl font-light text-white">Spotify Connect Player</h2>
-          <div class="text-sm text-stone-400 mt-1">High-Fidelity Audio Receiver • Surface Go 2</div>
-        </div>
-        <div class="flex items-center space-x-2 text-xs font-mono text-emerald-400">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>LIBRESPOT ACTIVE</span>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-12 gap-8 my-auto items-center">
-        <div class="col-span-5">
-          <img src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&w=600&q=80" alt="Album Cover" class="w-full aspect-square rounded-3xl shadow-2xl object-cover border border-white/10">
-        </div>
-        <div class="col-span-7 space-y-6">
-          <div>
-            <div class="text-xs font-mono uppercase tracking-widest text-emerald-400 font-bold">Now Streaming</div>
-            <h1 class="text-5xl font-light text-white tracking-tight mt-1">Weightless</h1>
-            <div class="text-xl text-stone-300 font-normal mt-2">Marconi Union • Transmissions Vol. 2</div>
-          </div>
-
-          <div class="space-y-2">
-            <div class="w-full h-2 bg-stone-800 rounded-full overflow-hidden">
-              <div class="h-full bg-white rounded-full" style="width: 45%"></div>
-            </div>
-            <div class="flex justify-between text-xs font-mono text-stone-400">
-              <span>1:48</span>
-              <span>8:00</span>
-            </div>
-          </div>
-
-          <div class="flex items-center space-x-6 pt-2">
-            <button onclick="skipPreviousTrack(event)" class="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
-              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-            </button>
-            <button onclick="seekRelative(-15, event)" class="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 5V2L8 6l4 4V7a6 6 0 11-6 6H4a8 8 0 108-8z"/><text x="12" y="15.5" font-size="7" font-family="monospace" font-weight="bold" fill="currentColor" text-anchor="middle">15</text></svg>
-            </button>
-            <button onclick="toggleMusicPlayback(event)" class="w-20 h-20 rounded-full bg-white text-stone-950 flex items-center justify-center font-bold text-2xl hover:scale-105 transition shadow-2xl">
-              <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
-            </button>
-            <button onclick="seekRelative(15, event)" class="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 5V2l4 4-4 4V7a6 6 0 106 6h2a8 8 0 11-8-8z"/><text x="12" y="15.5" font-size="7" font-family="monospace" font-weight="bold" fill="currentColor" text-anchor="middle">15</text></svg>
-            </button>
-            <button onclick="skipNextTrack(event)" class="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
-              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================= PAGE 4: TIMERS & ALARMS ================= -->
-    <section class="carousel-page p-8 flex flex-col justify-between overflow-hidden" data-index="4">
-      <div class="border-b border-stone-800 pb-4">
-        <h2 class="text-3xl font-light text-white">Alarms & Zero-Latency Timers</h2>
-        <div class="text-sm text-stone-400 mt-1">Local SQLite Database • Piper Vocal Briefing Integration</div>
-      </div>
-
-      <div class="grid grid-cols-2 gap-8 my-auto">
-        <!-- Timer Radial -->
-        <div class="flow-capsule p-8 flex items-center justify-between">
-          <div>
-            <div class="text-xs uppercase tracking-wider text-stone-400 font-medium">Pasta Timer</div>
-            <div class="text-6xl font-light text-white font-mono my-2">04:12</div>
-            <div class="text-xs text-stone-400">Alert sound: Gentle Woodblock</div>
-          </div>
-          <div class="flex flex-col space-y-2">
-            <button class="px-5 py-2.5 rounded-full bg-white/10 text-white text-xs font-mono hover:bg-white/20">+1 Min</button>
-            <button class="px-5 py-2.5 rounded-full bg-white/10 text-white text-xs font-mono hover:bg-white/20">+5 Min</button>
-            <button class="px-5 py-2.5 rounded-full bg-stone-800 text-stone-300 text-xs font-mono hover:bg-stone-700">Cancel</button>
+        <div class="sp-scrubber">
+          <div class="sp-bar"><div id="hp-bar" class="sp-bar-fill"></div></div>
+          <div class="sp-time-row">
+            <span id="sp-time-elapsed">0:00</span>
+            <span id="sp-time-total">0:00</span>
           </div>
         </div>
 
-        <!-- Alarm Card -->
-        <div class="flow-capsule p-8 flex items-center justify-between">
-          <div>
-            <div class="text-xs uppercase tracking-wider text-amber-300 font-medium">Morning Wakeup</div>
-            <div class="text-6xl font-light text-white font-mono my-2">06:30<span class="text-2xl text-stone-400 ml-2">AM</span></div>
-            <div class="text-xs text-stone-400">Weekdays (Mon–Fri) • Piper Vocal Briefing</div>
-          </div>
-          <button class="px-6 py-3 rounded-full bg-white text-stone-900 font-bold text-xs shadow-md">ACTIVE</button>
+        <div class="sp-controls" data-controls>
+          <button class="tbtn small" data-action="previous" aria-label="Previous Track">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+          </button>
+          <button class="tbtn primary" data-action="toggle" aria-label="Play or pause" data-playicon>
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6L19 12z"/></svg>
+          </button>
+          <button class="tbtn small" data-action="next" aria-label="Next Track">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+          </button>
         </div>
-      </div>
+      </section>
 
-      <div class="text-xs text-stone-500 pt-4 border-t border-stone-800">
-        Speak "Hey Hermes, set a timer for 10 minutes" for instant hands-free creation.
-      </div>
-    </section>
+    </aside>
 
-    <!-- ================= PAGE 5: HERMES AI CHAT ================= -->
-    <section class="carousel-page p-8 flex flex-col justify-between overflow-hidden" data-index="5">
-      <div class="flex items-center justify-between border-b border-stone-800 pb-4">
-        <div>
-          <h2 class="text-3xl font-light text-white">Hermes Intelligence Core</h2>
-          <div class="text-sm text-stone-400 mt-1">Direct WebSocket link to hermes-node.local:8080</div>
-        </div>
-        <div class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono">
-          LAN ACTIVE
-        </div>
-      </div>
+  </div>
 
-      <div class="space-y-4 my-auto max-w-3xl">
-        <div class="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-2">
-          <div class="flex items-center space-x-2 text-xs font-mono text-stone-400">
-            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
-            <span>VOICE COMMAND TRANSCRIBED (WHISPER.CPP)</span>
-          </div>
-          <div class="text-xl text-white font-light">"Hey Hermes, is it going to rain before my run tomorrow morning?"</div>
-        </div>
-
-        <div class="p-6 rounded-3xl bg-stone-900/90 border border-stone-700/60 space-y-3">
-          <div class="flex items-center space-x-2 text-xs font-mono text-emerald-400">
-            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span>HERMES RESPONSE • PIPER SYNTHESIZED</span>
-          </div>
-          <div class="text-lg text-stone-200 font-normal leading-relaxed">
-            "Showers are forecasted to dissipate by 4:00 AM tonight. Tomorrow morning around 6:30 AM will be overcast but dry, with temperatures around 58 degrees and light northeast winds. You should be clear for your run."
-          </div>
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between pt-4 border-t border-stone-800">
-        <button onclick="toggleVoice()" class="px-6 py-3 rounded-full bg-white text-stone-900 font-bold text-xs flex items-center space-x-2">
-          <span>Speak to Hermes</span>
-        </button>
-        <span class="text-xs text-stone-500">Tier 1 Offline Intent Engine + Tier 2 Hermes Core</span>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- ================= ANDROID AUTO NAVIGATION DOCK ================= -->
-  <footer class="relative z-30 h-20 bg-black/90 backdrop-blur-2xl border-t border-stone-800/80 px-8 flex items-center justify-between">
-    
-    <!-- Left: App Switcher Launcher -->
-    <div class="flex items-center space-x-3">
-      <div class="flex items-center space-x-2">
-        <button onclick="scrollToPage(0)" id="dock-btn-0" class="w-11 h-11 rounded-2xl bg-white text-stone-950 flex items-center justify-center font-bold shadow-lg transition" title="Home Radar">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-        </button>
-        <button onclick="scrollToPage(1)" id="dock-btn-1" class="w-11 h-11 rounded-2xl bg-stone-900 border border-stone-800 text-stone-400 hover:text-white flex items-center justify-center transition" title="Weather Pro">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15zm5 5l-1 2m4-2l-1 2m4-2l-1 2"></path></svg>
-        </button>
-        <button onclick="scrollToPage(2)" id="dock-btn-2" class="w-11 h-11 rounded-2xl bg-stone-900 border border-stone-800 text-stone-400 hover:text-white flex items-center justify-center transition" title="Home Controls">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
-        </button>
-        <button onclick="scrollToPage(3)" id="dock-btn-3" class="w-11 h-11 rounded-2xl bg-stone-900 border border-stone-800 text-stone-400 hover:text-white flex items-center justify-center transition" title="Media Player">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>
-        </button>
-        <button onclick="scrollToPage(4)" id="dock-btn-4" class="w-11 h-11 rounded-2xl bg-stone-900 border border-stone-800 text-stone-400 hover:text-white flex items-center justify-center transition" title="Timers">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        </button>
-        <button onclick="scrollToPage(5)" id="dock-btn-5" class="w-11 h-11 rounded-2xl bg-stone-900 border border-stone-800 text-stone-400 hover:text-white flex items-center justify-center transition" title="Hermes AI">
-          <span class="font-bold text-sm">H</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Center: Voice Assistant Trigger -->
-    <button onclick="toggleVoice()" class="flex items-center space-x-3 px-6 py-2.5 rounded-full bg-stone-900 border border-stone-800 hover:border-stone-700 shadow-md">
-      <div class="flex space-x-1 items-center h-4">
-        <span class="w-1.5 h-3 bg-stone-300 rounded-full"></span>
-        <span class="w-1.5 h-4 bg-amber-400 rounded-full"></span>
-        <span class="w-1.5 h-5 bg-stone-100 rounded-full"></span>
-        <span class="w-1.5 h-3 bg-emerald-400 rounded-full"></span>
-      </div>
-      <span class="text-xs font-normal text-stone-300">"Hey Hermes"</span>
-    </button>
-
-    <!-- Right: Telemetry & Status Indicators -->
-    <div class="flex items-center space-x-6 text-sm font-normal text-stone-300">
-      <div class="flex items-center space-x-2 text-xs text-stone-400">
-        <span class="w-2 h-2 rounded-full bg-emerald-400/80"></span>
-        <span>Wi-Fi 6</span>
-      </div>
-      <span id="dock-clock" class="text-lg font-light text-white font-mono">10:42 PM</span>
-      <button onclick="toggleQuickSettings()" class="w-11 h-11 rounded-2xl bg-stone-900 border border-stone-800 flex items-center justify-center text-stone-300 hover:text-white">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+  <!-- ===================================================================
+       BOTTOM DOCK (Android Auto / CarPlay Style Navigation Bar)
+       =================================================================== -->
+  <nav class="aa-dock" id="aa-dock" onclick="event.stopPropagation()">
+    <div class="dock-left">
+      <button class="dock-pill active" id="dock-btn-auto" onclick="setDashboardMode('split')" title="Dashboard View">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="18" rx="2"/><rect x="14" y="3" width="7" height="8" rx="2"/><rect x="14" y="15" width="7" height="6" rx="2"/></svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="dock-pill" id="dock-btn-map" onclick="setDashboardMode('map')" title="Fullscreen Map">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+        <span>Live Map</span>
       </button>
     </div>
 
-  </footer>
-
-  <!-- QUICK SETTINGS DRAWER OVERLAY -->
-  <div id="quick-settings" class="hidden fixed bottom-24 left-6 right-6 flow-capsule p-6 z-50 shadow-2xl space-y-4">
-    <div class="flex items-center justify-between border-b border-stone-800 pb-3">
-      <h3 class="text-sm font-medium text-white">System Hardware Overrides</h3>
-      <button onclick="toggleQuickSettings()" class="text-xs text-stone-400 hover:text-white">Done [X]</button>
-    </div>
-    <div class="grid grid-cols-4 gap-4">
-      <div class="p-4 rounded-2xl bg-black/60 border border-stone-800">
-        <div class="text-xs text-stone-400 mb-2">Display Brightness</div>
-        <input type="range" class="w-full accent-white" value="80">
+    <!-- Center Dock Music Pill (Shows track title & mini controls when playing) -->
+    <div class="dock-center-player hidden" id="dock-center-player" onclick="toggleMapFocus(event)">
+      <img id="dock-thumb" class="dock-art" alt="Track Art">
+      <div class="dock-track-info">
+        <span class="dock-title" id="dock-title">--</span>
+        <span class="dock-artist" id="dock-artist">--</span>
       </div>
-      <div class="p-4 rounded-2xl bg-black/60 border border-stone-800">
-        <div class="text-xs text-stone-400 mb-2">Dolby Audio Volume</div>
-        <input type="range" class="w-full accent-stone-300" value="45">
-      </div>
-      <div class="p-4 rounded-2xl bg-black/60 border border-stone-800">
-        <div class="text-xs text-stone-400">Nightstand Clock Mode</div>
-        <div class="text-sm font-medium text-amber-300 mt-1">Deep OLED Amber</div>
-      </div>
-      <div class="p-4 rounded-2xl bg-black/60 border border-stone-800">
-        <div class="text-xs text-stone-400">Microphone Hardware</div>
-        <div class="text-sm font-medium text-emerald-400 mt-1">Active (Listening)</div>
-      </div>
-    </div>
-    
-    <!-- Seamless Spotify Simulation Toggle & Backdrop Mode -->
-    <div class="pt-3 border-t border-stone-800 space-y-3 text-xs font-mono">
-      <div class="flex justify-between items-center">
-        <span class="text-stone-400">Spotify Connect Streaming:</span>
-        <button onclick="toggleMusicActiveState()" id="spotify-sim-btn" class="px-4 py-2 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold text-xs">
-          MUSIC STATUS: ACTIVE (STREAMING)
-        </button>
-      </div>
-      <div id="quick-backdrop-row" class="flex justify-between items-center pt-1 border-t border-stone-800/60">
-        <div>
-          <span class="text-stone-300 font-medium">When Playing, Screensaver Backdrop:</span>
-          <div class="text-[11px] text-stone-500 font-sans">Choose between photo slideshow or full-screen album artwork</div>
-        </div>
-        <button onclick="toggleAlbumArtBackdrop()" id="quick-backdrop-btn" class="px-4 py-2 rounded-full bg-stone-900 border border-stone-700 text-stone-300 hover:text-white font-medium text-xs flex items-center space-x-2">
-          <svg class="w-3.5 h-3.5 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-          <span id="quick-backdrop-btn-text">Photo Backdrop (Click to change)</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- VOICE LISTENING OVERLAY -->
-  <div id="voice-bar" class="hidden fixed bottom-28 left-1/2 -translate-x-1/2 flow-capsule px-8 py-4 flex items-center space-x-4 z-50 shadow-2xl border-stone-700">
-    <div class="flex space-x-1.5 items-center h-5">
-      <span class="w-2 h-4 bg-stone-300 rounded-full animate-bounce"></span>
-      <span class="w-2 h-7 bg-amber-400 rounded-full animate-bounce" style="animation-delay: 0.15s"></span>
-      <span class="w-2 h-8 bg-white rounded-full animate-bounce" style="animation-delay: 0.3s"></span>
-      <span class="w-2 h-5 bg-emerald-400 rounded-full animate-bounce" style="animation-delay: 0.45s"></span>
-    </div>
-    <span class="text-sm text-white font-normal">Listening... "Hey Hermes"</span>
-    <button onclick="toggleVoice()" class="text-xs text-stone-400 hover:text-white ml-3">[X]</button>
-  </div>
-
-  <!-- ================= IMMICH PHOTOS DEFAULT IDLE SCREENSAVER ================= -->
-  <!-- Automatically active when idle / not in use. Tap anywhere to wake active dashboard -->
-  <div id="immich-screensaver" onclick="wakeFromScreensaver()" class="fixed inset-0 z-50 bg-black flex flex-col justify-end p-12 pb-6 cursor-pointer transition-opacity duration-700 ease-in-out opacity-100">
-    
-    <!-- Full-Bleed High-Res Photo Background with Subtle Ken Burns Effect -->
-    <div class="absolute inset-0 overflow-hidden pointer-events-none">
-      <img id="immich-img" src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=2560&q=85" 
-           alt="Slideshow Photo" 
-           class="w-full h-full object-cover scale-105 transition-transform duration-10000 ease-linear transform hover:scale-110" />
-      <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/40"></div>
+      <button class="tbtn tiny" data-action="toggle" aria-label="Play/Pause" data-playicon onclick="event.stopPropagation()">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6L19 12z"/></svg>
+      </button>
     </div>
 
-    <!-- Bottom Row: Dual Hero — Clock on Left, Borderless Full-Height Spotify on Right -->
-    <div class="relative z-10 flex items-stretch justify-between transition-colors duration-500 w-full mb-3" id="immich-hud-container">
-      
-      <!-- Left Hero: Clock, Weather & Photo Details -->
-      <div class="flex flex-col justify-between py-1" id="immich-clock-col">
-        <div>
-          <div id="immich-clock-digits" class="text-[7.5rem] font-light text-white tracking-tight leading-none transition-colors duration-500 hud-shadow">
-            10:42<span id="immich-clock-ampm" class="text-3xl text-stone-400 font-normal ml-3">PM</span>
-          </div>
-          <div id="immich-weather-text" class="text-xl font-normal text-stone-200 mt-2 flex items-center space-x-3 transition-colors duration-500 hud-shadow">
-            <span>Sunday, October 18</span>
-            <span class="text-stone-500">•</span>
-            <span id="immich-weather-temp" class="text-stone-300">Austin: 68°F Light Rain</span>
-          </div>
-        </div>
-        
-        <!-- Photo Details with dynamic contrast colors -->
-        <div class="mt-4 flex items-center space-x-3 text-xs text-stone-400 font-mono" id="immich-meta-row">
-          <span id="immich-location-pill" class="px-2.5 py-1 rounded-md bg-white/10 text-white font-normal transition-colors">Yosemite Valley</span>
-          <span id="immich-meta-text">Immich Server • July 2024</span>
-          <span>•</span>
-          <span id="immich-exif-text">Sony A7 IV • 24mm f/2.8</span>
-        </div>
+    <div class="dock-right">
+      <div class="dock-clock" data-dock-clock>--:-- PM</div>
+      <button class="dock-icon-btn" onclick="enterScreensaver()" title="Photo Screensaver">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ===================================================================
+       SCREENSAVER — Default Photo Frame (Returns after inactivity)
+       =================================================================== -->
+  <div id="screensaver">
+    <img class="photo" id="photo-a" alt="" crossorigin="anonymous">
+    <img class="photo" id="photo-b" alt="" crossorigin="anonymous">
+    <div class="ss-scrim" id="ss-scrim"></div>
+
+    <div class="ss-hud">
+      <div class="ss-clock-col tone-light" id="ss-clock-col">
+        <div class="clock" data-clock><span class="hm">--:--</span><span class="ampm"></span></div>
+        <div class="subline" id="ss-weather-line">&nbsp;</div>
       </div>
 
-      <!-- Right Hero: Borderless, Full-Height Spotify Connect Player (Height matches Clock + Text below it) -->
-      <div id="immich-spotify-hero" class="w-[460px] flex flex-col justify-between transition-all duration-500 py-1" onclick="event.stopPropagation();">
-        
-        <!-- Top Row: Broadcast Header & Backdrop Toggle -->
-        <div class="flex items-center justify-between w-full">
-          <div class="text-xs font-mono tracking-widest text-emerald-400 font-semibold uppercase flex items-center">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse mr-2"></span>
-            SPOTIFY CONNECT
-          </div>
-          <!-- Backdrop toggle button (Photo vs Album Art) -->
-          <button onclick="toggleAlbumArtBackdrop(event)" id="immich-backdrop-toggle-btn" class="px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-mono text-stone-200 transition flex items-center space-x-2">
-            <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-            <span id="immich-backdrop-label">Backdrop: Photo</span>
-          </button>
+      <!-- Borderless Spotify Hero on Screensaver (Only while active) -->
+      <div class="ss-spotify tone-light hidden" id="ss-spotify">
+        <div class="ss-sp-head">
+          <span class="live"><i></i>SPOTIFY CONNECT</span>
+          <button class="pill-btn" id="backdrop-btn" data-action="backdrop">Backdrop: Photo</button>
         </div>
-
-        <!-- Middle: Borderless Album Art Thumbnail & Huge Glanceable Track Details -->
-        <div class="flex items-center space-x-5 my-auto py-2">
-          <div class="w-24 h-24 rounded-2xl overflow-hidden shadow-2xl flex-shrink-0 bg-stone-900 border border-white/10">
-            <img id="immich-spotify-cover" src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&w=300&q=80" alt="Album Art" class="w-full h-full object-cover">
-          </div>
-          <div class="min-w-0 flex-1">
-            <div id="immich-spotify-title" class="text-3xl font-light text-white tracking-tight leading-tight truncate transition-colors duration-500">
-              Weightless
-            </div>
-            <div id="immich-spotify-artist" class="text-sm font-normal text-stone-300 truncate transition-colors duration-500 mt-0.5">
-              Marconi Union • Transmissions Vol. 2
-            </div>
-            <div id="immich-spotify-device" class="text-xs text-stone-400 font-mono mt-1">
-              Surface Go 2 • Living Room
-            </div>
+        <div class="ss-sp-track">
+          <img id="ss-cover" alt="" crossorigin="anonymous">
+          <div style="min-width:0;flex:1">
+            <div class="title" id="ss-title">--</div>
+            <div class="artist muted" id="ss-artist">--</div>
           </div>
         </div>
-
-        <!-- Progress Scrubber -->
-        <div class="w-full space-y-1 my-1">
-          <div class="w-full h-1.5 bg-white/20 rounded-full overflow-hidden flex">
-            <div id="immich-spotify-prog" class="h-full bg-white rounded-full transition-colors duration-500" style="width: 45%"></div>
-          </div>
-          <div class="flex justify-between text-[11px] font-mono text-stone-400">
-            <span id="immich-spotify-time-elapsed">1:48</span>
-            <span>8:00</span>
-          </div>
+        <div class="ss-progress">
+          <div class="track"><div class="fill" id="ss-fill"></div></div>
+          <div class="times muted"><span id="ss-elapsed">0:00</span><span id="ss-duration">0:00</span></div>
         </div>
-
-        <!-- Bottom Tactile Transport Controls: Skip Back, Skip Ahead (15s), Play/Pause, Skip Ahead, Skip Next -->
-        <div class="flex items-center justify-between w-full pt-1" id="immich-spotify-controls">
-          <!-- Skip Back (Previous Track) -->
-          <button onclick="skipPreviousTrack(event)" class="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-stone-200 hover:text-white flex items-center justify-center transition" title="Skip Back (Previous Track)">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-          </button>
-
-          <!-- Skip Back 15s (Seek -15s) -->
-          <button onclick="seekRelative(-15, event)" class="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-stone-200 hover:text-white flex items-center justify-center transition" title="Skip Back 15s">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 5V2L8 6l4 4V7a6 6 0 11-6 6H4a8 8 0 108-8z"/>
-              <text x="12" y="15.5" font-size="7" font-family="monospace" font-weight="bold" fill="currentColor" text-anchor="middle">15</text>
-            </svg>
-          </button>
-
-          <!-- Play / Pause Button -->
-          <button onclick="toggleMusicPlayback(event)" id="immich-spotify-playbtn" class="w-14 h-14 rounded-full bg-white text-stone-950 flex items-center justify-center font-bold text-xl hover:scale-105 transition shadow-2xl">
-            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
-          </button>
-
-          <!-- Skip Ahead 15s (Seek +15s) -->
-          <button onclick="seekRelative(15, event)" class="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-stone-200 hover:text-white flex items-center justify-center transition" title="Skip Ahead 15s">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 5V2l4 4-4 4V7a6 6 0 106 6h2a8 8 0 11-8-8z"/>
-              <text x="12" y="15.5" font-size="7" font-family="monospace" font-weight="bold" fill="currentColor" text-anchor="middle">15</text>
-            </svg>
-          </button>
-
-          <!-- Skip Button (Next Track) -->
-          <button onclick="skipNextTrack(event)" class="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-stone-200 hover:text-white flex items-center justify-center transition" title="Skip (Next Track)">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-          </button>
+        <div class="ss-controls" data-controls>
+          <button class="tbtn" data-action="previous" aria-label="Previous track"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+          <button class="tbtn" data-action="back15" aria-label="Back 15 seconds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 3.5v4.5h4.5"/><text x="12.6" y="15.6" font-size="7" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">15</text></svg></button>
+          <button class="tbtn primary" data-action="toggle" aria-label="Play or pause" data-playicon><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6L19 12z"/></svg></button>
+          <button class="tbtn" data-action="fwd15" aria-label="Forward 15 seconds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><path d="M21 3.5v4.5h-4.5"/><text x="11.4" y="15.6" font-size="7" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">15</text></svg></button>
+          <button class="tbtn" data-action="next" aria-label="Next track"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
         </div>
-
       </div>
-
     </div>
 
-    <!-- Bottom Minimalist Swipe Bar -->
-    <div class="relative z-10 flex flex-col items-center justify-center pointer-events-none mt-4">
-      <div id="immich-swipe-bar" class="w-36 h-1.5 rounded-full bg-white/40 transition-colors duration-500"></div>
-    </div>
-
+    <!-- Bottom minimalist gesture swipe bar -->
+    <div class="gesture-bar" id="gesture-bar"></div>
   </div>
 
   <!-- Scripts -->
-  <script src="js/dock.js"></script>
-  <script src="js/screensaver.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/livemap.js"></script>
+  <script src="js/sky.js"></script>
   <script src="js/weather.js"></script>
   <script src="js/media.js"></script>
+  <script src="js/screensaver.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

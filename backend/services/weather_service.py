@@ -1,151 +1,224 @@
-import urllib.request
 import json
+import math
+import threading
 import time
+import urllib.request
+
 from backend.config import CONFIG, save_config
 
+USER_AGENT = {"User-Agent": "OmniHub-Display/1.0"}
+
+
+def _get_json(url, timeout=10):
+    req = urllib.request.Request(url, headers=USER_AGENT)
+    with urllib.request.urlopen(req, timeout=timeout) as res:
+        return json.loads(res.read().decode("utf-8"))
+
+
 class WeatherService:
+    """
+    Local weather (Open-Meteo, no API key) plus a regional weather grid that
+    drives the living map: cloud cover, precipitation, snow and wind sampled
+    on a lat/lon grid covering ~100+ miles around the display.
+    """
+
     def __init__(self):
+        self._lock = threading.Lock()
         self.cached_weather = None
         self.last_weather_fetch = 0
-        self.weather_cache_ttl = 600 # 10 minutes
+        self.weather_cache_ttl = 600  # 10 minutes
 
-        self.cached_radar = None
-        self.last_radar_fetch = 0
-        self.radar_cache_ttl = 300 # 5 minutes
+        self.cached_field = None
+        self.last_field_fetch = 0
+        self.field_cache_ttl = 600
 
-        # Run automatic IP geolocation detection if enabled
-        if CONFIG.get("location", {}).get("auto_detect", True):
-            self.auto_detect_location()
+        loc = CONFIG.get("location", {})
+        # Browser GPS fixes are more precise than IP lookups; don't overwrite them on boot
+        if loc.get("auto_detect", True) and loc.get("source") != "gps":
+            threading.Thread(target=self.auto_detect_location, daemon=True).start()
+
+    # ------------------------------------------------------------------ location
 
     def auto_detect_location(self):
-        """
-        Discovers geographic location via IP geolocation service.
-        Sets city, state/region, latitude, and longitude automatically.
-        """
-        endpoints = [
-            "http://ip-api.com/json",
-            "https://ipapi.co/json/"
-        ]
-        for url in endpoints:
+        """Resolve city / region / coordinates from the public IP address."""
+        for url in ("http://ip-api.com/json", "https://ipapi.co/json/"):
             try:
-                req = urllib.request.Request(url, headers={"User-Agent": "OmniHub-Display/1.0"})
-                with urllib.request.urlopen(req, timeout=5) as res:
-                    if res.status == 200:
-                        data = json.loads(res.read().decode("utf-8"))
-                        city = data.get("city")
-                        region = data.get("regionName") or data.get("region") or data.get("region_code")
-                        lat = data.get("lat") or data.get("latitude")
-                        lon = data.get("lon") or data.get("longitude")
-
-                        if city and lat and lon:
-                            print(f"[WeatherService] Automatically detected location: {city}, {region} ({lat}, {lon})")
-                            CONFIG["location"]["city"] = city
-                            CONFIG["location"]["state"] = region or ""
-                            CONFIG["location"]["latitude"] = float(lat)
-                            CONFIG["location"]["longitude"] = float(lon)
-                            save_config(CONFIG)
-                            return True
-            except Exception as e:
-                pass
+                data = _get_json(url, timeout=5)
+                city = data.get("city")
+                region = data.get("regionName") or data.get("region") or data.get("region_code")
+                lat = data.get("lat") or data.get("latitude")
+                lon = data.get("lon") or data.get("longitude")
+                if city and lat is not None and lon is not None:
+                    print(f"[WeatherService] IP location: {city}, {region} ({lat}, {lon})")
+                    self.set_location(city, region or "", lat, lon, source="ip")
+                    return True
+            except Exception:
+                continue
+        print("[WeatherService] IP geolocation unavailable; using saved location.")
         return False
 
-    def set_location(self, city, state, lat, lon):
-        """Updates location manually or from browser GPS coordinates."""
-        CONFIG["location"]["city"] = str(city)
-        CONFIG["location"]["state"] = str(state)
-        CONFIG["location"]["latitude"] = float(lat)
-        CONFIG["location"]["longitude"] = float(lon)
+    def set_location(self, city, state, lat, lon, source="manual"):
+        loc = CONFIG.setdefault("location", {})
+        loc.update({
+            "city": str(city),
+            "state": str(state),
+            "latitude": round(float(lat), 4),
+            "longitude": round(float(lon), 4),
+            "source": source,
+        })
         save_config(CONFIG)
-        self.cached_weather = None # Invalidate cache to force immediate refresh
-        return CONFIG["location"]
+        with self._lock:
+            self.cached_weather = None
+            self.cached_field = None
+        return loc
 
-    def reverse_geocode(self, lat, lon):
-        """Resolves city and state from latitude and longitude using Open-Meteo geocoding."""
+    def reverse_geocode(self, lat, lon, source="gps"):
         try:
-            url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}"
-            req = urllib.request.Request(url, headers={"User-Agent": "OmniHub/1.0"})
-            with urllib.request.urlopen(req, timeout=5) as res:
-                if res.status == 200:
-                    data = json.loads(res.read().decode("utf-8"))
-                    addr = data.get("address", {})
-                    city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("county") or "Local"
-                    state = addr.get("state") or addr.get("country") or ""
-                    return self.set_location(city, state, lat, lon)
+            data = _get_json(
+                f"https://nominatim.openstreetmap.org/reverse?format=json&zoom=10&lat={lat}&lon={lon}",
+                timeout=5,
+            )
+            addr = data.get("address", {})
+            city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("county") or "Local"
+            state = addr.get("state") or addr.get("country") or ""
+            return self.set_location(city, state, lat, lon, source=source)
         except Exception:
-            pass
-        return self.set_location("Current Location", "", lat, lon)
+            return self.set_location(CONFIG["location"].get("city", "Local"),
+                                     CONFIG["location"].get("state", ""), lat, lon, source=source)
+
+    # ------------------------------------------------------------------ forecast
 
     def get_weather(self):
         now = time.time()
-        if self.cached_weather and (now - self.last_weather_fetch < self.weather_cache_ttl):
-            return self.cached_weather
+        with self._lock:
+            if self.cached_weather and now - self.last_weather_fetch < self.weather_cache_ttl:
+                return self.cached_weather
 
         lat = CONFIG["location"]["latitude"]
         lon = CONFIG["location"]["longitude"]
-        
         url = (
-            f"https://api.open-meteo.com/v1/forecast?"
+            "https://api.open-meteo.com/v1/forecast?"
             f"latitude={lat}&longitude={lon}&"
-            f"current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m&"
-            f"hourly=temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,weather_code&"
-            f"daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max&"
-            f"temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timeformat=unixtime&timezone=auto"
+            "current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,"
+            "rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m&"
+            "hourly=temperature_2m,precipitation_probability,weather_code,is_day&"
+            "daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&"
+            "temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&"
+            "timeformat=unixtime&timezone=auto&forecast_days=2"
         )
-
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "OmniHub/1.0"})
-            with urllib.request.urlopen(req, timeout=10) as response:
-                if response.status == 200:
-                    data = json.loads(response.read().decode("utf-8"))
-                    data["location"] = CONFIG["location"]
-                    self.cached_weather = data
-                    self.last_weather_fetch = now
-                    return data
+            data = _get_json(url)
+            data["location"] = CONFIG["location"]
+            data["source"] = "live"
+            with self._lock:
+                self.cached_weather = data
+                self.last_weather_fetch = now
+            return data
         except Exception as e:
             print(f"[WeatherService] Open-Meteo fetch error: {e}")
-            if self.cached_weather:
-                return self.cached_weather
-            # Fallback mock for zero-connectivity situations
-            return self._get_fallback_weather()
+            with self._lock:
+                if self.cached_weather:
+                    return self.cached_weather
+            return self._fallback_weather()
 
-    def get_radar_frames(self):
+    # ------------------------------------------------------------------ regional grid
+
+    def get_weather_field(self, cols=7, rows=5):
+        """
+        Samples current conditions on a cols x rows grid. Each value is the centre
+        of a cell; bbox gives the outer cell edges so the frontend can stretch the
+        grid over the map with bilinear smoothing.
+        """
         now = time.time()
-        if self.cached_radar and (now - self.last_radar_fetch < self.radar_cache_ttl):
-            return self.cached_radar
+        with self._lock:
+            if self.cached_field and now - self.last_field_fetch < self.field_cache_ttl:
+                return self.cached_field
 
-        url = "https://api.rainviewer.com/public/weather-maps.json"
+        lat0 = float(CONFIG["location"]["latitude"])
+        lon0 = float(CONFIG["location"]["longitude"])
+        radius = float(CONFIG.get("map", {}).get("radius_miles", 100)) * 1.6  # cover screen corners
+        half_lat = radius / 69.0
+        half_lon = radius / (69.0 * max(0.2, math.cos(math.radians(lat0))))
+        bbox = {"north": lat0 + half_lat, "south": lat0 - half_lat,
+                "west": lon0 - half_lon, "east": lon0 + half_lon}
+
+        cell_lat = (bbox["north"] - bbox["south"]) / rows
+        cell_lon = (bbox["east"] - bbox["west"]) / cols
+        lats, lons = [], []
+        for r in range(rows):
+            for c in range(cols):
+                lats.append(round(bbox["north"] - (r + 0.5) * cell_lat, 3))
+                lons.append(round(bbox["west"] + (c + 0.5) * cell_lon, 3))
+
+        url = (
+            "https://api.open-meteo.com/v1/forecast?"
+            f"latitude={','.join(map(str, lats))}&longitude={','.join(map(str, lons))}&"
+            "current=cloud_cover,cloud_cover_low,cloud_cover_high,precipitation,snowfall,"
+            "weather_code,wind_speed_10m,wind_direction_10m&"
+            "wind_speed_unit=mph&precipitation_unit=inch&timezone=auto"
+        )
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "OmniHub/1.0"})
-            with urllib.request.urlopen(req, timeout=10) as response:
-                if response.status == 200:
-                    data = json.loads(response.read().decode("utf-8"))
-                    data["location"] = CONFIG["location"]
-                    self.cached_radar = data
-                    self.last_radar_fetch = now
-                    return data
+            raw = _get_json(url, timeout=12)
+            if isinstance(raw, dict):
+                raw = [raw]
+            cells = []
+            for item in raw:
+                cur = item.get("current", {})
+                cells.append({
+                    "cloud": cur.get("cloud_cover", 0) or 0,
+                    "low": cur.get("cloud_cover_low", 0) or 0,
+                    "high": cur.get("cloud_cover_high", 0) or 0,
+                    "precip": cur.get("precipitation", 0) or 0,
+                    "snow": cur.get("snowfall", 0) or 0,
+                    "code": cur.get("weather_code", 0) or 0,
+                    "wind_speed": cur.get("wind_speed_10m", 0) or 0,
+                    "wind_dir": cur.get("wind_direction_10m", 0) or 0,
+                })
+            field = {"bbox": bbox, "cols": cols, "rows": rows, "cells": cells,
+                     "source": "live", "fetched_at": now}
+            with self._lock:
+                self.cached_field = field
+                self.last_field_fetch = now
+            return field
         except Exception as e:
-            print(f"[WeatherService] RainViewer fetch error: {e}")
-            if self.cached_radar:
-                return self.cached_radar
-            return {
-                "host": "https://tilecache.rainviewer.com",
-                "radar": {"past": [], "nowcast": []},
-                "location": CONFIG["location"]
-            }
+            print(f"[WeatherService] Weather grid fetch error: {e}")
+            with self._lock:
+                if self.cached_field:
+                    return self.cached_field
+            return self._fallback_field(bbox, cols, rows)
 
-    def _get_fallback_weather(self):
+    # ------------------------------------------------------------------ offline fallbacks
+
+    def _fallback_weather(self):
+        now = int(time.time())
+        hour = now - now % 3600
         return {
+            "source": "fallback",
             "current": {
-                "temperature_2m": 68.0,
-                "apparent_temperature": 67.2,
-                "relative_humidity_2m": 65,
-                "precipitation": 0.05,
-                "weather_code": 61,
-                "wind_speed_10m": 7.2,
-                "wind_direction_10m": 45,
-                "surface_pressure": 1018.4
+                "temperature_2m": 68.0, "apparent_temperature": 67.0, "relative_humidity_2m": 65,
+                "precipitation": 0.0, "weather_code": 2, "cloud_cover": 45, "is_day": 1,
+                "wind_speed_10m": 7.0, "wind_direction_10m": 225,
             },
-            "location": CONFIG["location"]
+            "hourly": {
+                "time": [hour + i * 3600 for i in range(24)],
+                "temperature_2m": [68 - (i % 12) * 0.5 for i in range(24)],
+                "precipitation_probability": [10] * 24,
+                "weather_code": [2] * 24,
+                "is_day": [1] * 24,
+            },
+            "daily": {"temperature_2m_max": [74], "temperature_2m_min": [58],
+                      "precipitation_probability_max": [10], "weather_code": [2]},
+            "location": CONFIG["location"],
         }
+
+    def _fallback_field(self, bbox, cols, rows):
+        cells = []
+        for r in range(rows):
+            for c in range(cols):
+                cover = 30 + 40 * math.sin((c + r) * 0.9) ** 2
+                cells.append({"cloud": cover, "low": cover * 0.6, "high": 20, "precip": 0,
+                              "snow": 0, "code": 2, "wind_speed": 8, "wind_dir": 225})
+        return {"bbox": bbox, "cols": cols, "rows": rows, "cells": cells, "source": "fallback"}
+
 
 weather_service = WeatherService()
