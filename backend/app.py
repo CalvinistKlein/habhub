@@ -70,6 +70,10 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"alarms": data})
             return
 
+        elif path == "/api/location":
+            self._send_json(CONFIG.get("location", {}))
+            return
+
         elif path == "/api/system/version":
             data = updater_service.get_status()
             self._send_json(data)
@@ -134,6 +138,21 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
             text = payload.get("text", "")
             res = voice_pipeline.synthesize_speech(text)
             self._send_json({"synthesized": res, "text": text})
+            return
+
+        elif path == "/api/location":
+            lat = payload.get("latitude")
+            lon = payload.get("longitude")
+            city = payload.get("city")
+            state = payload.get("state")
+            if lat and lon:
+                if city and state:
+                    updated = weather_service.set_location(city, state, lat, lon)
+                else:
+                    updated = weather_service.reverse_geocode(lat, lon)
+                self._send_json({"status": "success", "location": updated})
+            else:
+                self._send_json({"status": "error", "message": "latitude and longitude required"}, status_code=400)
             return
 
         elif path == "/api/system/update":

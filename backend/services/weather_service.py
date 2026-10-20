@@ -1,7 +1,7 @@
 import urllib.request
 import json
 import time
-from backend.config import CONFIG
+from backend.config import CONFIG, save_config
 
 class WeatherService:
     def __init__(self):
@@ -12,6 +12,68 @@ class WeatherService:
         self.cached_radar = None
         self.last_radar_fetch = 0
         self.radar_cache_ttl = 300 # 5 minutes
+
+        # Run automatic IP geolocation detection if enabled
+        if CONFIG.get("location", {}).get("auto_detect", True):
+            self.auto_detect_location()
+
+    def auto_detect_location(self):
+        """
+        Discovers geographic location via IP geolocation service.
+        Sets city, state/region, latitude, and longitude automatically.
+        """
+        endpoints = [
+            "http://ip-api.com/json",
+            "https://ipapi.co/json/"
+        ]
+        for url in endpoints:
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "OmniHub-Display/1.0"})
+                with urllib.request.urlopen(req, timeout=5) as res:
+                    if res.status == 200:
+                        data = json.loads(res.read().decode("utf-8"))
+                        city = data.get("city")
+                        region = data.get("regionName") or data.get("region") or data.get("region_code")
+                        lat = data.get("lat") or data.get("latitude")
+                        lon = data.get("lon") or data.get("longitude")
+
+                        if city and lat and lon:
+                            print(f"[WeatherService] Automatically detected location: {city}, {region} ({lat}, {lon})")
+                            CONFIG["location"]["city"] = city
+                            CONFIG["location"]["state"] = region or ""
+                            CONFIG["location"]["latitude"] = float(lat)
+                            CONFIG["location"]["longitude"] = float(lon)
+                            save_config(CONFIG)
+                            return True
+            except Exception as e:
+                pass
+        return False
+
+    def set_location(self, city, state, lat, lon):
+        """Updates location manually or from browser GPS coordinates."""
+        CONFIG["location"]["city"] = str(city)
+        CONFIG["location"]["state"] = str(state)
+        CONFIG["location"]["latitude"] = float(lat)
+        CONFIG["location"]["longitude"] = float(lon)
+        save_config(CONFIG)
+        self.cached_weather = None # Invalidate cache to force immediate refresh
+        return CONFIG["location"]
+
+    def reverse_geocode(self, lat, lon):
+        """Resolves city and state from latitude and longitude using Open-Meteo geocoding."""
+        try:
+            url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}"
+            req = urllib.request.Request(url, headers={"User-Agent": "OmniHub/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as res:
+                if res.status == 200:
+                    data = json.loads(res.read().decode("utf-8"))
+                    addr = data.get("address", {})
+                    city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("county") or "Local"
+                    state = addr.get("state") or addr.get("country") or ""
+                    return self.set_location(city, state, lat, lon)
+        except Exception:
+            pass
+        return self.set_location("Current Location", "", lat, lon)
 
     def get_weather(self):
         now = time.time()
@@ -35,6 +97,7 @@ class WeatherService:
             with urllib.request.urlopen(req, timeout=10) as response:
                 if response.status == 200:
                     data = json.loads(response.read().decode("utf-8"))
+                    data["location"] = CONFIG["location"]
                     self.cached_weather = data
                     self.last_weather_fetch = now
                     return data
@@ -56,6 +119,7 @@ class WeatherService:
             with urllib.request.urlopen(req, timeout=10) as response:
                 if response.status == 200:
                     data = json.loads(response.read().decode("utf-8"))
+                    data["location"] = CONFIG["location"]
                     self.cached_radar = data
                     self.last_radar_fetch = now
                     return data
@@ -63,7 +127,11 @@ class WeatherService:
             print(f"[WeatherService] RainViewer fetch error: {e}")
             if self.cached_radar:
                 return self.cached_radar
-            return {"host": "https://tilecache.rainviewer.com", "radar": {"past": [], "nowcast": []}}
+            return {
+                "host": "https://tilecache.rainviewer.com",
+                "radar": {"past": [], "nowcast": []},
+                "location": CONFIG["location"]
+            }
 
     def _get_fallback_weather(self):
         return {

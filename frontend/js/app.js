@@ -9,7 +9,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Automatic Smooth Kiosk Refresh when Git Update Occurs
   startUpdateWatcher();
+
+  // Automatic Fullscreen Trigger
+  initAutoFullscreen();
 });
+
+function initAutoFullscreen() {
+  function requestFS() {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {
+        // Modern browsers may block programmatic fullscreen until first tap/click
+      });
+    }
+  }
+
+  // Attempt immediately on DOM ready
+  requestFS();
+
+  // Also bind to first touch or click to satisfy browser user-gesture requirements
+  document.addEventListener('click', requestFS, { once: true });
+  document.addEventListener('touchstart', requestFS, { once: true });
+}
 
 function startUpdateWatcher() {
   setInterval(async () => {

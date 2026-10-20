@@ -15,11 +15,12 @@ DEFAULT_CONFIG = {
     
     # Location for Weather & Radar
     "location": {
+        "auto_detect": True, # Automatically resolve location via IP / Browser GPS
         "city": "Austin",
         "state": "TX",
         "latitude": 30.2672,
         "longitude": -97.7431,
-        "radar_station": "KAUS"
+        "radar_station": "AUTO"
     },
     
     # Weather Settings (Open-Meteo & RainViewer)

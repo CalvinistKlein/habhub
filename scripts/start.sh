@@ -90,8 +90,12 @@ fi
 # Supports both native Wayland and X11 via --ozone-platform-hint=auto
 KIOSK_FLAGS=(
     "--kiosk"
+    "--start-fullscreen"
+    "--start-maximized"
     "--app=${APP_URL}"
     "--ozone-platform-hint=auto"
+    "--no-first-run"
+    "--no-default-browser-check"
     "--noerrdialogs"
     "--disable-infobars"
     "--check-for-update-interval=31536000"
@@ -103,6 +107,7 @@ KIOSK_FLAGS=(
     "--disable-session-crashed-bubble"
     "--disable-features=Translate"
     "--autoplay-policy=no-user-gesture-required"
+    "--password-store=basic"
     "--window-size=1920,1280"
     "--window-position=0,0"
 )
