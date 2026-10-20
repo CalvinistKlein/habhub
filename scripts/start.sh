@@ -20,7 +20,33 @@ echo "  Project Root: ${PROJECT_ROOT}"
 echo "  Target URL:   ${APP_URL}"
 echo "====================================================="
 
-# 1. Start Python Backend Daemon if not already running
+# 1. Auto-Detect Graphical Display (Wayland or X11)
+# Especially crucial when launched via SSH, TTY, or systemd
+UID_NUM=$(id -u)
+if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]; then
+    echo "[Launcher] DISPLAY not set in current shell. Probing physical sessions..."
+    if [ -S "/run/user/${UID_NUM}/wayland-0" ]; then
+        export WAYLAND_DISPLAY="wayland-0"
+        export XDG_RUNTIME_DIR="/run/user/${UID_NUM}"
+        echo "[Launcher] Attached to active Wayland display (wayland-0)."
+    elif [ -S "/run/user/${UID_NUM}/wayland-1" ]; then
+        export WAYLAND_DISPLAY="wayland-1"
+        export XDG_RUNTIME_DIR="/run/user/${UID_NUM}"
+        echo "[Launcher] Attached to active Wayland display (wayland-1)."
+    elif [ -S "/tmp/.X11-unix/X0" ]; then
+        export DISPLAY=":0"
+        export XAUTHORITY="${HOME}/.Xauthority"
+        echo "[Launcher] Attached to active X11 display (:0)."
+    elif [ -S "/tmp/.X11-unix/X1" ]; then
+        export DISPLAY=":1"
+        export XAUTHORITY="${HOME}/.Xauthority"
+        echo "[Launcher] Attached to active X11 display (:1)."
+    else
+        echo "[Launcher] Warning: No active X11 or Wayland display socket detected."
+    fi
+fi
+
+# 2. Start Python Backend Daemon if not already running
 if ! curl -s "http://127.0.0.1:${PORT}/api/status" > /dev/null 2>&1; then
     echo "[Launcher] Starting OmniHub backend service on port ${PORT}..."
     python3 "${PROJECT_ROOT}/backend/app.py" >> "$LOG_FILE" 2>&1 &
@@ -52,18 +78,20 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# 2. Prevent Display Sleeping / DPMS on Surface Go 2
-if command -v xset > /dev/null 2>&1; then
+# 3. Prevent Display Sleeping / DPMS on Surface Go 2
+if [ -n "$DISPLAY" ] && command -v xset > /dev/null 2>&1; then
     xset s off 2>/dev/null || true
     xset -dpms 2>/dev/null || true
     xset s noblank 2>/dev/null || true
 fi
 
-# 3. Detect and Launch Kiosk Browser
-# Chromium / Chrome flags tailored for 10.5" Surface Go 2 3:2 touchscreen (1920x1280)
+# 4. Detect and Launch Kiosk Browser
+# Chromium / Chrome flags tailored for Surface Go 2 3:2 touchscreen (1920x1280)
+# Supports both native Wayland and X11 via --ozone-platform-hint=auto
 KIOSK_FLAGS=(
     "--kiosk"
     "--app=${APP_URL}"
+    "--ozone-platform-hint=auto"
     "--noerrdialogs"
     "--disable-infobars"
     "--check-for-update-interval=31536000"
