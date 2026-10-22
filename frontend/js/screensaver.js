@@ -1,6 +1,6 @@
-// OmniHub Idle Screensaver & Automatic Contrast Engine
-// Calibrated baseline: Dark pine/twilight bottom-left Yosemite -> White text. Otherwise Black.
-// Returns to photo screensaver after a couple seconds of inactivity.
+// OmniHub Idle Screensaver & Dynamic Canvas Contrast Engine
+// Calibrated baseline: Samples bottom-left 35% x 30% of image with offscreen canvas
+// Relative luminance (0.2126R + 0.7152G + 0.0722B): L <= 0.30 -> White text, L > 0.30 -> Obsidian Black text
 
 const SLIDESHOW_PHOTOS = [
   {
@@ -98,17 +98,16 @@ function applyPhoto() {
   }
 
   // Crossfade between A and B
-  if (photoA.classList.contains('show')) {
-    photoB.src = targetUrl;
-    photoB.classList.add('show');
-    photoA.classList.remove('show');
-  } else {
-    photoA.src = targetUrl;
-    photoA.classList.add('show');
-    photoB.classList.remove('show');
-  }
+  const activeImg = photoA.classList.contains('show') ? photoB : photoA;
+  const oldImg = photoA.classList.contains('show') ? photoA : photoB;
 
-  applyScreensaverContrast();
+  activeImg.crossOrigin = 'anonymous';
+  activeImg.onload = () => {
+    analyzeAndApplyContrast(activeImg, current);
+  };
+  activeImg.src = targetUrl;
+  activeImg.classList.add('show');
+  oldImg.classList.remove('show');
 }
 
 function toggleAlbumArtBackdrop() {
@@ -120,10 +119,43 @@ function toggleAlbumArtBackdrop() {
   applyPhoto();
 }
 
-function applyScreensaverContrast() {
-  const current = SLIDESHOW_PHOTOS[photoIndex];
-  const isDark = current ? current.isDark : true;
+function analyzeAndApplyContrast(imgElement, fallbackMeta) {
+  let isDark = fallbackMeta ? fallbackMeta.isDark : true;
+  try {
+    if (imgElement && imgElement.naturalWidth > 0 && imgElement.naturalHeight > 0) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 32;
+      canvas.height = 32;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Sample bottom-left 35% width and 30% height where clock & titles sit
+        const sw = imgElement.naturalWidth * 0.35;
+        const sh = imgElement.naturalHeight * 0.30;
+        const sx = 0;
+        const sy = imgElement.naturalHeight - sh;
+        ctx.drawImage(imgElement, sx, sy, sw, sh, 0, 0, 32, 32);
+        const imgData = ctx.getImageData(0, 0, 32, 32).data;
+        let totalLuminance = 0;
+        const pixelCount = imgData.length / 4;
+        for (let i = 0; i < imgData.length; i += 4) {
+          const r = imgData[i] / 255;
+          const g = imgData[i + 1] / 255;
+          const b = imgData[i + 2] / 255;
+          totalLuminance += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        }
+        const avgL = totalLuminance / pixelCount;
+        // Dark background (L <= 0.30) requires white text; bright requires obsidian black text
+        isDark = avgL <= 0.30;
+      }
+    }
+  } catch (err) {
+    // If CORS tainted, fall back to metadata
+    isDark = fallbackMeta ? fallbackMeta.isDark : true;
+  }
+  setScreensaverTone(isDark);
+}
 
+function setScreensaverTone(isDark) {
   const clockCol = document.getElementById('ss-clock-col');
   const spotifyCard = document.getElementById('ss-spotify');
   const scrim = document.getElementById('ss-scrim');
@@ -154,5 +186,18 @@ function applyScreensaverContrast() {
     if (scrim) {
       scrim.style.background = 'linear-gradient(to top, rgba(255,255,255,0.45) 0%, transparent 40%)';
     }
+  }
+}
+
+function applyScreensaverContrast() {
+  const photoA = document.getElementById('photo-a');
+  const photoB = document.getElementById('photo-b');
+  const current = SLIDESHOW_PHOTOS[photoIndex];
+  const activeImg = (photoB && photoB.classList.contains('show')) ? photoB : photoA;
+
+  if (activeImg && activeImg.complete && activeImg.naturalWidth > 0) {
+    analyzeAndApplyContrast(activeImg, current);
+  } else {
+    setScreensaverTone(current ? current.isDark : true);
   }
 }

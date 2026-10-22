@@ -19,6 +19,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 4. Hardware Auto-Fullscreen Trigger
   initAutoFullscreen();
+
+  // 5. Active Alarm Watcher
+  startAlarmWatcher();
 });
 
 // Live Synchronized Clocks
@@ -385,6 +388,7 @@ async function toggleKitchenTimer(e) {
     if (timerSecondsRemaining <= 0) {
       clearInterval(activeTimerInterval);
       activeTimerInterval = null;
+      playTimerChime();
       if (pill) pill.classList.remove('active');
       if (title) title.textContent = "Done!";
       if (sub) sub.textContent = "Timer Expired";
@@ -669,4 +673,124 @@ async function saveSettings() {
     if (btn) btn.textContent = "Error saving";
     setTimeout(() => { if (btn) btn.textContent = "Save & Apply"; }, 2000);
   }
+}
+
+// =============================================================================
+// SYNTHESIZED WEB AUDIO CHIMES & ALARM ENGINE
+// =============================================================================
+let audioCtx = null;
+function getAudioContext() {
+  if (!audioCtx) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) audioCtx = new AudioContext();
+  }
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  return audioCtx;
+}
+
+// 3-Tone ascending chime for Kitchen Timer (D5, A5, D6)
+function playTimerChime() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const notes = [587.33, 880.00, 1174.66];
+  notes.forEach((freq, idx) => {
+    const startTime = ctx.currentTime + idx * 0.18;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, startTime);
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(0.28, startTime + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.65);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(startTime);
+    osc.stop(startTime + 0.65);
+  });
+}
+
+// Continuous pleasant pulsing chime for Alarm Ringing
+let alarmChimeInterval = null;
+function startAlarmAudio() {
+  if (alarmChimeInterval) return;
+  const playPulse = () => {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const chords = [523.25, 659.25, 783.99]; // C Major arpeggio
+    chords.forEach((freq, idx) => {
+      const startTime = ctx.currentTime + idx * 0.12;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, startTime);
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.32, startTime + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.55);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.55);
+    });
+  };
+  playPulse();
+  alarmChimeInterval = setInterval(playPulse, 1800);
+}
+
+function stopAlarmAudio() {
+  if (alarmChimeInterval) {
+    clearInterval(alarmChimeInterval);
+    alarmChimeInterval = null;
+  }
+}
+
+// =============================================================================
+// ACTIVE ALARM WATCHER & DISMISSAL
+// =============================================================================
+let alarmWatcherInterval = null;
+let isAlarmCurrentlyRinging = false;
+
+function startAlarmWatcher() {
+  if (alarmWatcherInterval) return;
+  checkActiveAlarm();
+  alarmWatcherInterval = setInterval(checkActiveAlarm, 3000);
+}
+
+async function checkActiveAlarm() {
+  try {
+    const res = await fetch('/api/alarms/active');
+    if (res.ok) {
+      const data = await res.json();
+      const modal = document.getElementById('modal-alarm-ringing');
+      if (data.is_ringing && data.active_alarm) {
+        if (!isAlarmCurrentlyRinging) {
+          isAlarmCurrentlyRinging = true;
+          if (modal) modal.classList.remove('hidden');
+          if (typeof wakeFromScreensaver === 'function') wakeFromScreensaver();
+          const timeEl = document.getElementById('alarm-ring-time');
+          const labelEl = document.getElementById('alarm-ring-label');
+          if (timeEl) timeEl.textContent = data.active_alarm.time_str || '--:--';
+          if (labelEl) labelEl.textContent = data.active_alarm.label || 'Alarm';
+          startAlarmAudio();
+        }
+      } else {
+        if (isAlarmCurrentlyRinging) {
+          isAlarmCurrentlyRinging = false;
+          if (modal) modal.classList.add('hidden');
+          stopAlarmAudio();
+        }
+      }
+    }
+  } catch (e) {}
+}
+
+async function dismissRingingAlarm() {
+  isAlarmCurrentlyRinging = false;
+  const modal = document.getElementById('modal-alarm-ringing');
+  if (modal) modal.classList.add('hidden');
+  stopAlarmAudio();
+  try {
+    await fetch('/api/alarms/dismiss', { method: 'POST' });
+  } catch (e) {}
 }

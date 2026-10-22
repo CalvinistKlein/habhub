@@ -22,6 +22,7 @@ from backend.services.voice_pipeline import voice_pipeline
 from backend.services.updater_service import updater_service
 from backend.services.ha_service import ha_service
 from backend.services.immich_service import immich_service
+from backend.services.alarm_service import alarm_service
 
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
@@ -95,6 +96,11 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
         elif path == "/api/alarms":
             data = get_alarms()
             self._send_json({"alarms": data})
+            return
+
+        elif path == "/api/alarms/active":
+            data = alarm_service.get_state()
+            self._send_json(data)
             return
 
         elif path == "/api/timers":
@@ -235,6 +241,11 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"status": "success", "alarm": alarm})
             return
 
+        elif path == "/api/alarms/dismiss":
+            alarm_service.dismiss()
+            self._send_json({"status": "success", "message": "Alarm dismissed"})
+            return
+
         elif path == "/api/timers":
             duration = payload.get("duration", 300)
             label = payload.get("label", "Kitchen Timer")
@@ -316,6 +327,7 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
 def run_server(port=8765):
     init_db()
     updater_service.start()
+    alarm_service.start()
     server_address = ("0.0.0.0", port)
     httpd = ThreadedHTTPServer(server_address, OmniHubRequestHandler)
     print(f"=====================================================")

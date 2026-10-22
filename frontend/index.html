@@ -367,6 +367,19 @@
     </div>
   </div>
 
+  <!-- FULL-BLEED ALARM RINGING SCREEN -->
+  <div id="modal-alarm-ringing" class="omni-modal alarm-ringing-modal hidden" onclick="event.stopPropagation()">
+    <div class="alarm-ring-card">
+      <svg class="alarm-bell-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+      </svg>
+      <div class="alarm-ring-time" id="alarm-ring-time">06:30</div>
+      <div class="alarm-ring-label" id="alarm-ring-label">Morning Alarm</div>
+      <button class="alarm-dismiss-btn" id="btn-alarm-dismiss" onclick="dismissRingingAlarm()">DISMISS ALARM</button>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="js/icons.js"></script>
   <script src="js/livemap.js"></script>

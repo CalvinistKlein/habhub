@@ -1101,3 +1101,75 @@ body.mode-map #expand-pill-label { content: "Dashboard"; }
   color: var(--bone-dim);
   padding: 4px 2px;
 }
+
+/* =============================================================================
+   FULL-BLEED ALARM RINGING SCREEN
+   ============================================================================= */
+.alarm-ringing-modal {
+  z-index: 100000;
+  background: rgba(0, 0, 0, 0.94);
+  backdrop-filter: blur(24px);
+}
+.alarm-ring-card {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 480px;
+  width: 90%;
+  padding: 44px 32px;
+  border-radius: 32px;
+  background: radial-gradient(circle at 50% 25%, rgba(242, 180, 109, 0.14), #141312 75%);
+  border: 1px solid rgba(242, 180, 109, 0.35);
+  box-shadow: 0 0 90px rgba(242, 180, 109, 0.3);
+  animation: alarm-pulse-box 1.6s infinite alternate ease-in-out;
+}
+@keyframes alarm-pulse-box {
+  0% { box-shadow: 0 0 40px rgba(242, 180, 109, 0.2); transform: scale(0.99); }
+  100% { box-shadow: 0 0 90px rgba(242, 180, 109, 0.5); transform: scale(1.01); }
+}
+.alarm-bell-icon {
+  width: 76px;
+  height: 76px;
+  stroke: var(--amber);
+  margin-bottom: 20px;
+  animation: bell-ring 0.8s infinite ease-in-out alternate;
+}
+@keyframes bell-ring {
+  0% { transform: rotate(-16deg); }
+  100% { transform: rotate(16deg); }
+}
+.alarm-ring-time {
+  font-size: 76px;
+  font-weight: 300;
+  letter-spacing: -2px;
+  color: var(--bone);
+  line-height: 1;
+}
+.alarm-ring-label {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--amber);
+  margin-top: 12px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+.alarm-dismiss-btn {
+  margin-top: 38px;
+  width: 100%;
+  padding: 24px 24px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #0c0a09;
+  background: var(--amber);
+  border: none;
+  border-radius: 22px;
+  box-shadow: 0 10px 32px rgba(242, 180, 109, 0.55);
+  cursor: pointer;
+  transition: transform 0.15s, background-color 0.15s;
+}
+.alarm-dismiss-btn:active {
+  transform: scale(0.96);
+  background: #e59e55;
+}

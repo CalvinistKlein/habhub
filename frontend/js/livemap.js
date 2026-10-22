@@ -75,6 +75,9 @@
     radiusMiles: 100,
     radarHost: 'https://tilecache.rainviewer.com',
     radarPath: null,
+    radarFrames: [],
+    radarFrameIndex: 0,
+    radarAnimInterval: null,
 
     init(opts) {
       this.radiusMiles = (opts && opts.radiusMiles) || 100;
@@ -97,15 +100,66 @@
         if (res.ok) {
           const data = await res.json();
           if (data.host) this.radarHost = data.host;
-          if (data.latest && data.latest.path) {
-            this.radarPath = data.latest.path;
-            if (this.radar && this.lat !== null) {
-              const RADAR_URL = (z, x, y) => `${this.radarHost}${this.radarPath}/256/${z}/${x}/${y}/2/1_1.png`;
-              this.placeTiles(this.radar, RADAR_URL, Math.min(this.z, 10));
+          const frames = (data.past && Array.isArray(data.past) && data.past.length > 0)
+            ? data.past
+            : (data.latest ? [data.latest] : []);
+
+          if (frames.length > 0) {
+            this.radarFrames = frames;
+            if (!this.radarPath) {
+              this.radarFrameIndex = frames.length - 1;
+              this.radarPath = frames[this.radarFrameIndex].path;
+              if (this.radar && this.lat !== null) {
+                const RADAR_URL = (z, x, y) => `${this.radarHost}${this.radarPath}/256/${z}/${x}/${y}/2/1_1.png`;
+                this.placeTiles(this.radar, RADAR_URL, Math.min(this.z, 10));
+              }
             }
+            this.startRadarAnimation();
           }
         }
       } catch (e) {}
+    },
+
+    startRadarAnimation() {
+      if (this.radarAnimInterval) return;
+      this.radarAnimInterval = setInterval(() => {
+        if (!this.radarFrames || this.radarFrames.length <= 1) return;
+        this.radarFrameIndex = (this.radarFrameIndex + 1) % this.radarFrames.length;
+        const frame = this.radarFrames[this.radarFrameIndex];
+        if (!frame || !frame.path) return;
+        this.radarPath = frame.path;
+        this.updateRadarTiles();
+
+        const badgeText = document.getElementById('map-badge-text');
+        if (badgeText) {
+          const isLatest = this.radarFrameIndex === this.radarFrames.length - 1;
+          if (isLatest) {
+            badgeText.textContent = "100-MILE LIVE DOPPLER RADAR";
+          } else {
+            const latestTime = this.radarFrames[this.radarFrames.length - 1].time;
+            const diffMin = Math.max(0, Math.round((latestTime - frame.time) / 60));
+            badgeText.textContent = `DOPPLER RADAR -${diffMin}m`;
+          }
+        }
+      }, 1400);
+    },
+
+    updateRadarTiles() {
+      if (!this.radar || !this.radarPath) return;
+      const imgs = this.radar.querySelectorAll('img');
+      if (imgs.length === 0) {
+        if (this.lat !== null) {
+          const RADAR_URL = (z, x, y) => `${this.radarHost}${this.radarPath}/256/${z}/${x}/${y}/2/1_1.png`;
+          this.placeTiles(this.radar, RADAR_URL, Math.min(this.z, 10));
+        }
+        return;
+      }
+      imgs.forEach((img) => {
+        if (img.dataset.tileKey) {
+          img.src = `${this.radarHost}${this.radarPath}/256/${img.dataset.tileKey}/2/1_1.png`;
+          img.style.visibility = 'visible';
+        }
+      });
     },
 
     setLocation(lat, lon, label) {
@@ -154,7 +208,9 @@
           img.style.top = Math.floor((ty * TILE - c.y) * s + this.H / 2) + 'px';
           img.style.width = img.style.height = Math.ceil(size) + 1 + 'px';
           img.onerror = () => { img.style.visibility = 'hidden'; };
-          img.src = urlFn(zt, ((tx % n) + n) % n, ty);
+          const tileX = ((tx % n) + n) % n;
+          img.dataset.tileKey = `${zt}/${tileX}/${ty}`;
+          img.src = urlFn(zt, tileX, ty);
           container.appendChild(img);
         }
       }
