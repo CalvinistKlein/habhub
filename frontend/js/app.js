@@ -557,8 +557,10 @@ async function openSettingsModal(e) {
 
       // Display
       const ss = cfg.screensaver || {};
+      const ssMode = document.getElementById('cfg-screensaver-mode');
       const idleSec = document.getElementById('cfg-idle-seconds');
       const photoInt = document.getElementById('cfg-photo-interval');
+      if (ssMode) ssMode.value = ss.mode || 'aquarium';
       if (idleSec) idleSec.value = ss.return_after_seconds || 10;
       if (photoInt) photoInt.value = ss.photo_interval_seconds || 30;
     }
@@ -643,6 +645,7 @@ async function saveSettings() {
       endpoint: document.getElementById('cfg-hermes-endpoint').value.trim()
     },
     screensaver: {
+      mode: document.getElementById('cfg-screensaver-mode') ? document.getElementById('cfg-screensaver-mode').value : 'aquarium',
       return_after_seconds: parseInt(document.getElementById('cfg-idle-seconds').value, 10) || 10,
       photo_interval_seconds: parseInt(document.getElementById('cfg-photo-interval').value, 10) || 30
     }
@@ -656,6 +659,10 @@ async function saveSettings() {
     });
     if (res.ok) {
       if (btn) btn.textContent = "Saved!";
+      if (typeof screensaverMode !== 'undefined') {
+        screensaverMode = payload.screensaver.mode;
+        if (typeof updateScreensaverModeUI === 'function') updateScreensaverModeUI();
+      }
       // Reload photos if immich is enabled
       if (payload.immich.enabled) {
         fetch('/api/photos').then(r => r.json()).then(data => {

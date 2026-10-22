@@ -62,8 +62,9 @@ DEFAULT_CONFIG = {
         "paused_grace_seconds": 60        # Keep player visible this long after pausing, then hide
     },
 
-    # Idle behaviour: return to the photo screensaver after inactivity
+    # Idle behaviour: return to the photo or aquarium screensaver after inactivity
     "screensaver": {
+        "mode": "aquarium",               # "aquarium" (living reef) or "photos" (slideshow/immich)
         "return_after_seconds": 10,
         "photo_interval_seconds": 30
     },

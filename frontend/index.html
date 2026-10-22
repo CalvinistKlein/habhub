@@ -198,12 +198,39 @@
   </nav>
 
   <!-- ===================================================================
-       SCREENSAVER — Default Photo Frame (Returns after inactivity)
+       SCREENSAVER — Living Reef Aquarium & Photo Frame
        =================================================================== -->
-  <div id="screensaver">
+  <div id="screensaver" class="mode-aquarium">
+    <!-- Living Reef Aquarium Canvas Layer -->
+    <canvas id="aquarium-canvas"></canvas>
+
+    <!-- Photo Slideshow Layer -->
     <img class="photo" id="photo-a" alt="" crossorigin="anonymous">
     <img class="photo" id="photo-b" alt="" crossorigin="anonymous">
     <div class="ss-scrim" id="ss-scrim"></div>
+
+    <!-- Floating Top Bar: Mode Switcher, Feed Button, and Wake Target -->
+    <div class="ss-top-bar" id="ss-top-bar">
+      <button class="ss-top-pill" id="btn-ss-mode" onclick="toggleScreensaverMode(event)" title="Switch Screensaver Style">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="pill-icon"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24M14.83 14.83l4.24 4.24M14.83 9.17l4.24-4.24M4.93 19.07l4.24-4.24"/></svg>
+        <span id="ss-mode-label">Aquarium</span>
+      </button>
+
+      <button class="ss-top-pill feed-btn" id="btn-ss-feed" onclick="feedFishFromHUD(event)" title="Drop Food Flakes">
+        <span class="pill-emoji">🦐</span>
+        <span>Feed Fish</span>
+      </button>
+
+      <button class="ss-top-pill wake-btn" onclick="wakeFromScreensaver(event)" title="Return to Dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="pill-icon"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        <span>Dashboard</span>
+      </button>
+    </div>
+
+    <!-- Interactive Feeding Hint -->
+    <div class="aquarium-feed-hint" id="aquarium-feed-hint">
+      <span>Tap water to drop food • Double-tap or tap Dashboard to wake</span>
+    </div>
 
     <div class="ss-hud">
       <div class="ss-clock-col tone-light" id="ss-clock-col">
@@ -350,6 +377,13 @@
         <!-- DISPLAY TAB -->
         <div class="settings-tab-pane" id="tab-display">
           <div class="form-row">
+            <label for="cfg-screensaver-mode">Screensaver Style</label>
+            <select id="cfg-screensaver-mode" class="settings-input">
+              <option value="aquarium">Living Reef Fishtank (Interactive)</option>
+              <option value="photos">Photo Slideshow (Local & Immich)</option>
+            </select>
+          </div>
+          <div class="form-row">
             <label for="cfg-idle-seconds">Idle Timeout to Screensaver (Seconds)</label>
             <input type="number" id="cfg-idle-seconds" class="settings-input" min="5" max="300" placeholder="10">
           </div>
@@ -386,6 +420,7 @@
   <script src="js/sky.js"></script>
   <script src="js/weather.js"></script>
   <script src="js/media.js"></script>
+  <script src="js/aquarium.js"></script>
   <script src="js/screensaver.js"></script>
   <script src="js/app.js"></script>
 </body>

@@ -20,11 +20,36 @@ const SLIDESHOW_PHOTOS = [
 let photoIndex = 0;
 let isAlbumArtBackdrop = false;
 let idleTimer = null;
-const IDLE_TIMEOUT_MS = 10000; // 10 seconds of inactivity -> back to photo screensaver
+let IDLE_TIMEOUT_MS = 10000; // 10 seconds of inactivity -> back to screensaver
+let screensaverMode = 'aquarium'; // 'aquarium' (living reef) or 'photos' (slideshow/immich)
 
 async function initScreensaver() {
   const ss = document.getElementById('screensaver');
   if (!ss) return;
+
+  // Load user settings for default screensaver mode & timeout
+  try {
+    const sres = await fetch('/api/settings');
+    if (sres.ok) {
+      const sdata = await sres.json();
+      if (sdata.screensaver) {
+        if (sdata.screensaver.mode) screensaverMode = sdata.screensaver.mode;
+        if (sdata.screensaver.return_after_seconds) {
+          IDLE_TIMEOUT_MS = sdata.screensaver.return_after_seconds * 1000;
+        }
+      }
+    }
+  } catch (e) {}
+
+  updateScreensaverModeUI();
+
+  // Initialize Living Reef Aquarium Canvas
+  if (window.Aquarium) {
+    window.Aquarium.init();
+    if (!ss.classList.contains('off') && screensaverMode === 'aquarium') {
+      window.Aquarium.start();
+    }
+  }
 
   // Load local photos or Immich feed
   try {
@@ -39,12 +64,20 @@ async function initScreensaver() {
     }
   } catch (e) {}
 
-  // Tap anywhere on screensaver to wake up to dashboard
-  ss.addEventListener('pointerdown', () => {
-    wakeFromScreensaver();
+  // Tap listener on screensaver container
+  ss.addEventListener('pointerdown', (e) => {
+    // Top bar buttons and Spotify player handle their own interactions
+    if (e.target.closest('#ss-top-bar') || e.target.closest('#ss-spotify')) {
+      return;
+    }
+    // In photos mode, single tap anywhere immediately wakes to the dashboard
+    if (screensaverMode === 'photos') {
+      wakeFromScreensaver();
+    }
+    // In aquarium mode, single tap drops food pellets and double-tap wakes (handled by canvas)
   });
 
-  // Track any activity on the window to reset the 10-second idle timer
+  // Track any activity on the window to reset the idle timer
   const events = ['pointerdown', 'pointermove', 'touchstart', 'keydown'];
   events.forEach((ev) => {
     window.addEventListener(ev, resetIdleTimer, { passive: true });
@@ -58,6 +91,56 @@ async function initScreensaver() {
   applyPhoto();
 }
 
+function updateScreensaverModeUI() {
+  const ss = document.getElementById('screensaver');
+  const label = document.getElementById('ss-mode-label');
+  const feedBtn = document.getElementById('btn-ss-feed');
+
+  if (screensaverMode === 'aquarium') {
+    if (ss) {
+      ss.classList.remove('mode-photos');
+      ss.classList.add('mode-aquarium');
+    }
+    if (label) label.textContent = 'Aquarium';
+    if (feedBtn) feedBtn.style.display = 'inline-flex';
+    setScreensaverTone(true);
+    if (window.Aquarium && ss && !ss.classList.contains('off')) {
+      window.Aquarium.start();
+    }
+  } else {
+    if (ss) {
+      ss.classList.remove('mode-aquarium');
+      ss.classList.add('mode-photos');
+    }
+    if (label) label.textContent = 'Photos';
+    if (feedBtn) feedBtn.style.display = 'none';
+    if (window.Aquarium) window.Aquarium.stop();
+    applyPhoto();
+  }
+}
+
+function toggleScreensaverMode(e) {
+  if (e) e.stopPropagation();
+  screensaverMode = screensaverMode === 'aquarium' ? 'photos' : 'aquarium';
+  updateScreensaverModeUI();
+
+  // Persist preference
+  try {
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ screensaver: { mode: screensaverMode } })
+    });
+  } catch (err) {}
+}
+
+function feedFishFromHUD(e) {
+  if (e) e.stopPropagation();
+  if (window.Aquarium) {
+    window.Aquarium.feed();
+  }
+}
+
 function resetIdleTimer() {
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
@@ -69,13 +152,20 @@ function enterScreensaver() {
   const ss = document.getElementById('screensaver');
   if (!ss) return;
   ss.classList.remove('off');
-  applyScreensaverContrast();
+  if (screensaverMode === 'aquarium') {
+    if (window.Aquarium) window.Aquarium.start();
+    setScreensaverTone(true);
+  } else {
+    applyScreensaverContrast();
+  }
 }
 
-function wakeFromScreensaver() {
+function wakeFromScreensaver(e) {
+  if (e) e.stopPropagation();
   const ss = document.getElementById('screensaver');
   if (!ss) return;
   ss.classList.add('off');
+  if (window.Aquarium) window.Aquarium.stop();
   resetIdleTimer();
 }
 
