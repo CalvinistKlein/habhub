@@ -112,29 +112,39 @@ function toggleFullscreen(e) {
 function updateFullscreenIcon() {
   const enterIcon = document.querySelector('#dock-btn-fullscreen .icon-fs-enter');
   const exitIcon = document.querySelector('#dock-btn-fullscreen .icon-fs-exit');
+  const promptBanner = document.getElementById('fullscreen-prompt');
+
   if (document.fullscreenElement) {
     if (enterIcon) enterIcon.classList.add('hidden');
     if (exitIcon) exitIcon.classList.remove('hidden');
+    if (promptBanner) promptBanner.classList.add('hidden');
   } else {
     if (enterIcon) enterIcon.classList.remove('hidden');
     if (exitIcon) exitIcon.classList.add('hidden');
+    if (promptBanner) promptBanner.classList.remove('hidden');
   }
 }
 
 document.addEventListener('fullscreenchange', updateFullscreenIcon);
 document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
+document.addEventListener('mozfullscreenchange', updateFullscreenIcon);
 
 // Hardware & Browser Auto-Fullscreen (Uses Capture Phase so stopPropagation doesn't block it)
 function initAutoFullscreen() {
   function requestFS() {
     if (!document.fullscreenElement) {
       const el = document.documentElement;
-      const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+      const rfs = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
       if (rfs) {
-        rfs.call(el).catch(() => {});
+        rfs.call(el).then(() => {
+          updateFullscreenIcon();
+        }).catch(() => {});
       }
     }
   }
+
+  // Check state on startup
+  updateFullscreenIcon();
 
   // Capture phase ensures user gestures anywhere on the screen trigger fullscreen
   window.addEventListener('click', requestFS, { capture: true, once: true });

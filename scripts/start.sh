@@ -120,13 +120,14 @@ fi
 
 # 5. Dedicated Kiosk Flags
 # --user-data-dir ensures an isolated profile so it NEVER opens as a tab in an existing browser session.
-# Note: Passing the URL directly (instead of --app=...) ensures Chromium honors --kiosk on all Linux window managers.
+# --ozone-platform=x11 forces Xwayland compatibility which ensures GNOME Mutter completely hides the top bar.
 KIOSK_FLAGS=(
     "--user-data-dir=${KIOSK_PROFILE}"
     "--kiosk"
     "--start-fullscreen"
     "--start-maximized"
-    "--ozone-platform-hint=auto"
+    "--ozone-platform=x11"
+    "--window-position=0,0"
     "--no-first-run"
     "--no-default-browser-check"
     "--noerrdialogs"
@@ -156,17 +157,22 @@ fi
 
 echo "[Launcher] Kiosk Browser PID: ${BROWSER_PID}"
 
-# 6. Background Fullscreen Helper (Enforces OS Taskbar & Topbar Hide)
+# 6. Background Fullscreen Helper (Enforces OS Taskbar & GNOME Topbar Hide)
 (
-    sleep 2
-    # Ensure window manager flags window as fullscreen
-    if [ -n "$DISPLAY" ] && command -v wmctrl > /dev/null 2>&1; then
-        wmctrl -r "OmniHub" -b add,fullscreen 2>/dev/null || true
-    fi
-    if [ -n "$DISPLAY" ] && command -v xdotool > /dev/null 2>&1; then
-        xdotool search --onlyvisible --class "OmniHubKiosk" windowactivate --sync key F11 2>/dev/null || true
-        xdotool search --onlyvisible --class "chromium" windowactivate --sync key F11 2>/dev/null || true
-    fi
+    for sec in 1 2 4 6; do
+        sleep "$sec"
+        # Ensure window manager flags window as fullscreen
+        if [ -n "$DISPLAY" ] && command -v wmctrl > /dev/null 2>&1; then
+            wmctrl -r "OmniHub" -b add,fullscreen 2>/dev/null || true
+            wmctrl -r "Chrome" -b add,fullscreen 2>/dev/null || true
+            wmctrl -r "Chromium" -b add,fullscreen 2>/dev/null || true
+        fi
+        if [ -n "$DISPLAY" ] && command -v xdotool > /dev/null 2>&1; then
+            for cls in "OmniHubKiosk" "google-chrome" "chromium" "brave-browser" "firefox"; do
+                xdotool search --onlyvisible --class "$cls" windowactivate --sync key F11 2>/dev/null || true
+            done
+        fi
+    done
 ) &
 
 # Keep launcher running while browser is open
