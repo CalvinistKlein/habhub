@@ -16,6 +16,7 @@
     <!-- HERO CARD: LIVING MAP & ATMOSPHERE (Tap to expand/restore) -->
     <section id="card-map" class="card card-map" onclick="toggleMapFocus(event)">
       <div id="sat-tiles"></div>
+      <div id="radar-tiles"></div>
       <canvas id="light-canvas"></canvas>
       <div id="night-tiles"></div>
       <div id="sun-sheen"></div>
@@ -26,7 +27,20 @@
       <div id="you-marker"><div class="dot"></div><div class="label" id="marker-label">Locating...</div></div>
       <div class="map-badge" id="map-badge">
         <span class="badge-dot"></span>
-        <span id="map-badge-text">100-MILE LIVE SATELLITE</span>
+        <span id="map-badge-text">100-MILE LIVE DOPPLER RADAR</span>
+      </div>
+
+      <!-- Inbound Storm Alert Capsule -->
+      <div class="storm-alert-capsule hidden" id="storm-alert">
+        <span class="pulse-dot-red"></span>
+        <span id="storm-alert-text">Precipitation radar active</span>
+      </div>
+
+      <!-- NEXRAD Reflectivity dBZ Scale Legend -->
+      <div class="radar-dbz-bar" id="radar-dbz-bar">
+        <span class="dbz-label">10 dBZ</span>
+        <div class="dbz-gradient"></div>
+        <span class="dbz-label">65+ dBZ</span>
       </div>
 
       <!-- Floating Map Clock & Subtitle (Bottom-Left) -->

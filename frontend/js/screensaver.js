@@ -22,9 +22,22 @@ let isAlbumArtBackdrop = false;
 let idleTimer = null;
 const IDLE_TIMEOUT_MS = 10000; // 10 seconds of inactivity -> back to photo screensaver
 
-function initScreensaver() {
+async function initScreensaver() {
   const ss = document.getElementById('screensaver');
   if (!ss) return;
+
+  // Load local photos or Immich feed
+  try {
+    const res = await fetch('/api/photos');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.photos && data.photos.length > 0) {
+        data.photos.forEach((p) => {
+          SLIDESHOW_PHOTOS.unshift({ url: p.url, isDark: true, title: p.title });
+        });
+      }
+    }
+  } catch (e) {}
 
   // Tap anywhere on screensaver to wake up to dashboard
   ss.addEventListener('pointerdown', () => {

@@ -20,6 +20,7 @@ from backend.services.media_service import media_service
 from backend.services.ai_router import ai_router
 from backend.services.voice_pipeline import voice_pipeline
 from backend.services.updater_service import updater_service
+from backend.services.ha_service import ha_service
 
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
@@ -63,6 +64,16 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
             self._send_json(data)
             return
 
+        elif path == "/api/weather/radar":
+            data = weather_service.get_radar_frames()
+            self._send_json(data)
+            return
+
+        elif path == "/api/lights/state":
+            data = ha_service.get_light_state()
+            self._send_json(data)
+            return
+
         elif path == "/api/settings":
             self._send_json({
                 "screensaver": CONFIG.get("screensaver", {}),
@@ -90,6 +101,49 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
             data = updater_service.check_for_updates()
             status = updater_service.get_status()
             self._send_json(status)
+            return
+
+        elif path == "/api/photos":
+            pictures_dir = os.path.expanduser("~/Pictures")
+            photos = []
+            if os.path.exists(pictures_dir):
+                valid_exts = {".jpg", ".jpeg", ".png", ".webp"}
+                for root, _, files in os.walk(pictures_dir):
+                    for f in files:
+                        ext = os.path.splitext(f)[1].lower()
+                        if ext in valid_exts and not f.startswith("."):
+                            rel = os.path.relpath(os.path.join(root, f), pictures_dir)
+                            photos.append({
+                                "url": f"/api/photos/asset/{rel}",
+                                "title": os.path.splitext(f)[0]
+                            })
+                            if len(photos) >= 50:
+                                break
+                    if len(photos) >= 50:
+                        break
+            self._send_json({"photos": photos})
+            return
+
+        elif path.startswith("/api/photos/asset/"):
+            rel_path = path[len("/api/photos/asset/"):]
+            pictures_dir = os.path.expanduser("~/Pictures")
+            full_path = os.path.normpath(os.path.join(pictures_dir, rel_path))
+            if os.path.isfile(full_path) and os.path.abspath(full_path).startswith(os.path.abspath(pictures_dir)):
+                mime, _ = mimetypes.guess_type(full_path)
+                try:
+                    with open(full_path, "rb") as f:
+                        buf = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", mime or "image/jpeg")
+                    self.send_header("Content-Length", str(len(buf)))
+                    self.send_header("Cache-Control", "public, max-age=3600")
+                    self.end_headers()
+                    self.wfile.write(buf)
+                    return
+                except Exception as e:
+                    self.send_error(500, f"Error: {e}")
+                    return
+            self.send_error(404, "Photo Not Found")
             return
 
         elif path == "/api/location":
@@ -155,6 +209,12 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
             self._send_json(data)
             return
 
+        elif path == "/api/lights/toggle":
+            entity_id = payload.get("entity_id", "light.living_room")
+            res = ha_service.toggle_light(entity_id)
+            self._send_json(res)
+            return
+
         elif path == "/api/ai/chat":
             prompt = payload.get("message", "")
             response = ai_router.process_query(prompt)
@@ -165,6 +225,49 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
             text = payload.get("text", "")
             res = voice_pipeline.synthesize_speech(text)
             self._send_json({"synthesized": res, "text": text})
+            return
+
+        elif path == "/api/photos":
+            pictures_dir = os.path.expanduser("~/Pictures")
+            photos = []
+            if os.path.exists(pictures_dir):
+                valid_exts = {".jpg", ".jpeg", ".png", ".webp"}
+                for root, _, files in os.walk(pictures_dir):
+                    for f in files:
+                        ext = os.path.splitext(f)[1].lower()
+                        if ext in valid_exts and not f.startswith("."):
+                            rel = os.path.relpath(os.path.join(root, f), pictures_dir)
+                            photos.append({
+                                "url": f"/api/photos/asset/{rel}",
+                                "title": os.path.splitext(f)[0]
+                            })
+                            if len(photos) >= 50:
+                                break
+                    if len(photos) >= 50:
+                        break
+            self._send_json({"photos": photos})
+            return
+
+        elif path.startswith("/api/photos/asset/"):
+            rel_path = path[len("/api/photos/asset/"):]
+            pictures_dir = os.path.expanduser("~/Pictures")
+            full_path = os.path.normpath(os.path.join(pictures_dir, rel_path))
+            if os.path.isfile(full_path) and os.path.abspath(full_path).startswith(os.path.abspath(pictures_dir)):
+                mime, _ = mimetypes.guess_type(full_path)
+                try:
+                    with open(full_path, "rb") as f:
+                        buf = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", mime or "image/jpeg")
+                    self.send_header("Content-Length", str(len(buf)))
+                    self.send_header("Cache-Control", "public, max-age=3600")
+                    self.end_headers()
+                    self.wfile.write(buf)
+                    return
+                except Exception as e:
+                    self.send_error(500, f"Error: {e}")
+                    return
+            self.send_error(404, "Photo Not Found")
             return
 
         elif path == "/api/location":

@@ -32,6 +32,10 @@ class WeatherService:
         self.last_field_fetch = 0
         self.field_cache_ttl = 600
 
+        self.cached_radar = None
+        self.last_radar_fetch = 0
+        self.radar_cache_ttl = 180  # 3 minutes for radar sweeps
+
         loc = CONFIG.get("location", {})
         # Browser GPS fixes are more precise than IP lookups; don't overwrite them on boot
         if loc.get("auto_detect", True) and loc.get("source") != "gps":
@@ -186,6 +190,46 @@ class WeatherService:
                 if self.cached_field:
                     return self.cached_field
             return self._fallback_field(bbox, cols, rows)
+
+    # ------------------------------------------------------------------ rainviewer radar
+
+    def get_radar_frames(self):
+        """
+        Fetches live radar frame timestamps from RainViewer free API.
+        Enables seamless Doppler precipitation overlay on the 100-mile living map.
+        """
+        now = time.time()
+        with self._lock:
+            if self.cached_radar and now - self.last_radar_fetch < self.radar_cache_ttl:
+                return self.cached_radar
+
+        url = "https://api.rainviewer.com/public/weather-maps.json"
+        try:
+            raw = _get_json(url, timeout=8)
+            host = raw.get("host", "https://tilecache.rainviewer.com")
+            radar_dict = raw.get("radar", {})
+            past_frames = radar_dict.get("past", [])
+            nowcast_frames = radar_dict.get("nowcast", [])
+            latest_frame = past_frames[-1] if past_frames else None
+
+            radar_data = {
+                "host": host,
+                "latest": latest_frame,
+                "past": past_frames[-6:],  # keep last 6 frames for loop
+                "nowcast": nowcast_frames[:4],
+                "fetched_at": now,
+                "source": "live"
+            }
+            with self._lock:
+                self.cached_radar = radar_data
+                self.last_radar_fetch = now
+            return radar_data
+        except Exception as e:
+            print(f"[WeatherService] RainViewer fetch warning: {e}")
+            with self._lock:
+                if self.cached_radar:
+                    return self.cached_radar
+            return {"host": "https://tilecache.rainviewer.com", "latest": None, "past": [], "source": "unavailable"}
 
     # ------------------------------------------------------------------ offline fallbacks
 

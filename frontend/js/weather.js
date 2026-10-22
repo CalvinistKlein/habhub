@@ -142,4 +142,33 @@ function renderWeather(data) {
     const dayStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
     ssWeatherLine.textContent = `${dayStr} · ${placeStr} · ${temp}°F ${desc.label}`;
   }
+
+  // 4. Inbound Storm Alert Capsule (Time-to-Impact Math)
+  const stormAlert = document.getElementById('storm-alert');
+  const stormText = document.getElementById('storm-alert-text');
+  if (stormAlert && stormText) {
+    const isRainingNow = (cur.precipitation && cur.precipitation > 0.01) || [51,53,55,61,63,65,80,81,82,95].includes(code);
+    if (isRainingNow) {
+      stormAlert.classList.remove('hidden');
+      stormText.textContent = `Precipitation active over display · Wind ${windMph} mph`;
+    } else if (data.hourly && data.hourly.precipitation_probability) {
+      // Find first upcoming hour with >40% chance of rain
+      let foundRain = false;
+      const nowSec = Math.floor(Date.now() / 1000);
+      for (let i = 0; i < data.hourly.time.length && i < 8; i++) {
+        if (data.hourly.time[i] > nowSec && data.hourly.precipitation_probability[i] >= 40) {
+          const diffMins = Math.round((data.hourly.time[i] - nowSec) / 60);
+          stormAlert.classList.remove('hidden');
+          stormText.textContent = `Inbound precipitation · ~${diffMins}m to impact · Wind ${windMph} mph`;
+          foundRain = true;
+          break;
+        }
+      }
+      if (!foundRain) {
+        stormAlert.classList.add('hidden');
+      }
+    } else {
+      stormAlert.classList.add('hidden');
+    }
+  }
 }

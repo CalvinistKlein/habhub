@@ -418,23 +418,71 @@ async function toggleLivingRoomLights(e) {
   } catch (err) {}
 }
 
+let recognitionInstance = null;
+
 async function triggerHermesPrompt(e) {
   if (e) e.stopPropagation();
   const pill = document.getElementById('action-hermes-pill');
   const sub = document.getElementById('pill-hermes-sub');
   if (pill) pill.classList.add('active');
-  if (sub) sub.textContent = "Listening...";
 
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (SpeechRecognition) {
+    if (recognitionInstance) {
+      try { recognitionInstance.stop(); } catch (err) {}
+      recognitionInstance = null;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognitionInstance = recognition;
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      if (sub) sub.textContent = "Listening...";
+
+      recognition.onresult = async (event) => {
+        const transcript = event.results[0][0].transcript;
+        if (sub) sub.textContent = `"${transcript}"`;
+        await processHermesVoiceQuery(transcript, pill, sub);
+      };
+
+      recognition.onerror = async (event) => {
+        console.warn("[Hermes Voice] Speech error:", event.error);
+        if (sub) sub.textContent = "No voice heard";
+        setTimeout(() => resetHermesPill(pill, sub), 2500);
+      };
+
+      recognition.onend = () => {
+        recognitionInstance = null;
+      };
+
+      recognition.start();
+      return;
+    } catch (err) {
+      console.warn("[Hermes Voice] Could not start speech recognition:", err);
+    }
+  }
+
+  // Fallback if browser SpeechRecognition is unavailable
+  if (sub) sub.textContent = "Checking...";
+  await processHermesVoiceQuery("What's the weather today?", pill, sub);
+}
+
+async function processHermesVoiceQuery(queryText, pill, sub) {
   try {
     const res = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: "What's the weather today?" })
+      body: JSON.stringify({ message: queryText })
     });
     if (res.ok) {
       const data = await res.json();
-      if (sub) sub.textContent = "Answering...";
+      if (sub) sub.textContent = data.text ? data.text.substring(0, 35) + "..." : "Done.";
       if (data.text) {
+        // Send to local Piper TTS
         fetch('/api/voice/speak', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -442,10 +490,14 @@ async function triggerHermesPrompt(e) {
         });
       }
     }
-  } catch (err) {}
+  } catch (err) {
+    if (sub) sub.textContent = "Error answering";
+  }
 
-  setTimeout(() => {
-    if (pill) pill.classList.remove('active');
-    if (sub) sub.textContent = "Voice Agent";
-  }, 4000);
+  setTimeout(() => resetHermesPill(pill, sub), 4500);
+}
+
+function resetHermesPill(pill, sub) {
+  if (pill) pill.classList.remove('active');
+  if (sub) sub.textContent = "Voice Agent";
 }

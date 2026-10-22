@@ -31,18 +31,25 @@ class VoicePipeline:
 
     def generate_morning_briefing(self, weather_data=None):
         """
-        Compiles the morning Piper briefing for the 6:30 AM alarm.
+        Compiles the morning Piper briefing for the 6:30 AM alarm with live weather.
         """
-        temp = "68"
-        condition = "light rain"
-        if weather_data and "current" in weather_data:
-            temp = str(round(weather_data["current"].get("temperature_2m", 68)))
-            condition = "light rain"
+        if not weather_data:
+            try:
+                from backend.services.weather_service import weather_service
+                weather_data = weather_service.get_weather()
+            except Exception:
+                weather_data = {}
+
+        cur = weather_data.get("current", {}) if weather_data else {}
+        temp = str(round(cur.get("temperature_2m", 68)))
+        loc = weather_data.get("location", {}) if weather_data else {}
+        city = loc.get("city", "Austin")
+        wind = round(cur.get("wind_speed_10m", 5))
 
         briefing = (
-            f"Good morning. It is 6:30 AM. Current temperature in Austin is {temp} degrees "
-            f"with {condition}. Radar indicates showers moving northeast. "
-            f"Your living room ceiling array is active at 85 percent brightness. Have a wonderful day."
+            f"Good morning. It is 6:30 AM. Current temperature in {city} is {temp} degrees "
+            f"with wind at {wind} miles per hour. "
+            f"Living room lights are set. Have a wonderful and productive day."
         )
         return briefing
 

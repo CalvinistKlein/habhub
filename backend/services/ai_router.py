@@ -2,7 +2,9 @@ import json
 import urllib.request
 import time
 from backend.config import CONFIG
-from backend.database import get_connection
+from backend.database import get_connection, create_timer, toggle_alarm
+from backend.services.weather_service import weather_service
+from backend.services.ha_service import ha_service
 
 class AIRouter:
     def __init__(self):
@@ -50,11 +52,13 @@ class AIRouter:
                 unit = m.group(2)
                 multiplier = 60 if "minute" in unit else (3600 if "hour" in unit else 1)
                 duration = val * multiplier
+                create_timer(duration, f"Timer ({val} {unit})")
                 return {
                     "intent": "create_timer",
                     "response": f"Setting a timer for {val} {unit}{'s' if val > 1 else ''}.",
                     "action": {"type": "timer", "duration": duration}
                 }
+            create_timer(300, "5-Minute Kitchen Timer")
             return {
                 "intent": "create_timer",
                 "response": "Timer for 5 minutes started.",
@@ -62,13 +66,16 @@ class AIRouter:
             }
 
         # Lights
-        if "turn on the lights" in text or "lights on" in text:
+        if "turn on the lights" in text or "lights on" in text or "toggle light" in text:
+            res = ha_service.toggle_light("light.living_room")
+            state_str = res.get("state", "on").upper()
             return {
                 "intent": "light_control",
-                "response": "Living room lights turned on.",
-                "action": {"type": "light", "state": True}
+                "response": f"Living room lights turned {state_str}.",
+                "action": {"type": "light", "state": state_str == "ON"}
             }
         if "turn off the lights" in text or "lights off" in text:
+            res = ha_service.toggle_light("light.living_room")
             return {
                 "intent": "light_control",
                 "response": "Living room lights turned off.",
@@ -77,17 +84,24 @@ class AIRouter:
 
         # Alarms
         if "alarm" in text and "set" in text:
+            toggle_alarm(1, True)
             return {
                 "intent": "create_alarm",
-                "response": "Alarm set for 6:30 AM with morning voice briefing.",
+                "response": "Alarm active for 6:30 AM with morning voice briefing.",
                 "action": {"type": "alarm", "time": "06:30"}
             }
 
-        # Weather query
+        # Live Weather query
         if "weather" in text or "temperature" in text or "raining" in text:
+            w = weather_service.get_weather()
+            cur = w.get("current", {})
+            temp = round(cur.get("temperature_2m", 68))
+            loc = w.get("location", {})
+            city = loc.get("city", "Austin")
+            wind = round(cur.get("wind_speed_10m", 5))
             return {
                 "intent": "query_weather",
-                "response": "Austin is currently 68 degrees with light rain moving Northeast at 14 miles per hour.",
+                "response": f"{city} is currently {temp} degrees with wind at {wind} miles per hour.",
                 "action": {"type": "navigate", "page": 1}
             }
 

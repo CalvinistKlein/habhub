@@ -73,16 +73,39 @@
     lat: null, lon: null, z: 9, scale: 1, center: null, W: 0, H: 0,
     light: { elevation: 45, azimuth: 180, color: [255, 255, 255], darkness: 0, daylight: 1 },
     radiusMiles: 100,
+    radarHost: 'https://tilecache.rainviewer.com',
+    radarPath: null,
 
     init(opts) {
       this.radiusMiles = (opts && opts.radiusMiles) || 100;
       this.sat = document.getElementById('sat-tiles');
+      this.radar = document.getElementById('radar-tiles');
       this.night = document.getElementById('night-tiles');
       this.lightCanvas = document.getElementById('light-canvas');
       this.sheen = document.getElementById('sun-sheen');
       this.marker = document.getElementById('you-marker');
       window.addEventListener('resize', () => this.lat !== null && this.layout());
       setInterval(() => this.updateLighting(), 60 * 1000);
+
+      this.fetchRadarFrames();
+      setInterval(() => this.fetchRadarFrames(), 3 * 60 * 1000);
+    },
+
+    async fetchRadarFrames() {
+      try {
+        const res = await fetch('/api/weather/radar');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.host) this.radarHost = data.host;
+          if (data.latest && data.latest.path) {
+            this.radarPath = data.latest.path;
+            if (this.radar && this.lat !== null) {
+              const RADAR_URL = (z, x, y) => `${this.radarHost}${this.radarPath}/256/${z}/${x}/${y}/2/1_1.png`;
+              this.placeTiles(this.radar, RADAR_URL, Math.min(this.z, 10));
+            }
+          }
+        }
+      } catch (e) {}
     },
 
     setLocation(lat, lon, label) {
@@ -102,6 +125,10 @@
       this.center = project(this.lat, this.lon, this.z);
 
       this.placeTiles(this.sat, SAT_URL, this.z);
+      if (this.radarPath && this.radar) {
+        const RADAR_URL = (z, x, y) => `${this.radarHost}${this.radarPath}/256/${z}/${x}/${y}/2/1_1.png`;
+        this.placeTiles(this.radar, RADAR_URL, Math.min(this.z, 10));
+      }
       this.placeTiles(this.night, NIGHT_URL, Math.min(this.z, NIGHT_MAX_Z));
 
       this.marker.style.left = this.W / 2 + 'px';
