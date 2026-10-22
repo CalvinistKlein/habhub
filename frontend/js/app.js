@@ -501,3 +501,165 @@ function resetHermesPill(pill, sub) {
   if (pill) pill.classList.remove('active');
   if (sub) sub.textContent = "Voice Agent";
 }
+
+// =============================================================================
+// SETTINGS & INTEGRATIONS CONTROLLER
+// =============================================================================
+async function openSettingsModal(e) {
+  if (e) e.stopPropagation();
+  const modal = document.getElementById('modal-settings');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/settings');
+    if (res.ok) {
+      const cfg = await res.json();
+      // Immich
+      const imm = cfg.immich || {};
+      const immEnabled = document.getElementById('cfg-immich-enabled');
+      const immUrl = document.getElementById('cfg-immich-url');
+      const immKey = document.getElementById('cfg-immich-key');
+      const immAlbum = document.getElementById('cfg-immich-album');
+      if (immEnabled) immEnabled.checked = Boolean(imm.enabled);
+      if (immUrl) immUrl.value = imm.server_url || '';
+      if (immKey) immKey.value = imm.api_key || '';
+      if (immAlbum) immAlbum.value = imm.album_id || '';
+
+      // Home Assistant
+      const ha = cfg.home_assistant || {};
+      const haEnabled = document.getElementById('cfg-ha-enabled');
+      const haUrl = document.getElementById('cfg-ha-url');
+      const haToken = document.getElementById('cfg-ha-token');
+      const haLight = document.getElementById('cfg-ha-light');
+      if (haEnabled) haEnabled.checked = Boolean(ha.enabled);
+      if (haUrl) haUrl.value = ha.base_url || '';
+      if (haToken) haToken.value = ha.access_token || '';
+      if (haLight) haLight.value = ha.default_light_entity || 'light.living_room';
+
+      // Hermes
+      const her = cfg.hermes || {};
+      const herEnabled = document.getElementById('cfg-hermes-enabled');
+      const herEndpoint = document.getElementById('cfg-hermes-endpoint');
+      if (herEnabled) herEnabled.checked = Boolean(her.enabled);
+      if (herEndpoint) herEndpoint.value = her.endpoint || '';
+
+      // Display
+      const ss = cfg.screensaver || {};
+      const idleSec = document.getElementById('cfg-idle-seconds');
+      const photoInt = document.getElementById('cfg-photo-interval');
+      if (idleSec) idleSec.value = ss.return_after_seconds || 10;
+      if (photoInt) photoInt.value = ss.photo_interval_seconds || 30;
+    }
+  } catch (err) {}
+}
+
+function closeSettingsModal() {
+  const modal = document.getElementById('modal-settings');
+  if (modal) modal.classList.add('hidden');
+}
+
+function switchSettingsTab(tabId) {
+  document.querySelectorAll('.settings-tab-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.tab === tabId);
+  });
+  document.querySelectorAll('.settings-tab-pane').forEach((pane) => {
+    pane.classList.toggle('active', pane.id === tabId);
+  });
+}
+
+async function testImmichConnection() {
+  const btn = document.getElementById('btn-test-immich');
+  const feedback = document.getElementById('feedback-immich');
+  if (btn) btn.disabled = true;
+  if (feedback) feedback.textContent = "Testing connection to Immich server...";
+
+  // Save current values first
+  const url = document.getElementById('cfg-immich-url').value.trim();
+  const key = document.getElementById('cfg-immich-key').value.trim();
+  const album = document.getElementById('cfg-immich-album').value.trim();
+  const enabled = document.getElementById('cfg-immich-enabled').checked;
+
+  try {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        immich: { server_url: url, api_key: key, album_id: album, enabled: true }
+      })
+    });
+
+    const res = await fetch('/api/photos');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.source === 'immich' && data.photos && data.photos.length > 0) {
+        if (feedback) feedback.textContent = `Success! Discovered ${data.photos.length} photos from Immich server.`;
+        if (typeof SLIDESHOW_PHOTOS !== 'undefined') {
+          data.photos.forEach((p) => SLIDESHOW_PHOTOS.unshift({ url: p.url, isDark: true, title: p.title }));
+        }
+      } else {
+        if (feedback) feedback.textContent = "Connected, but 0 photo assets were returned. Check Album ID or API key permissions.";
+      }
+    } else {
+      if (feedback) feedback.textContent = "Immich server request returned error. Verify server URL & API key.";
+    }
+  } catch (err) {
+    if (feedback) feedback.textContent = `Connection error: ${err.message}`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function saveSettings() {
+  const btn = document.getElementById('btn-save-settings');
+  if (btn) btn.textContent = "Saving...";
+
+  const payload = {
+    immich: {
+      enabled: document.getElementById('cfg-immich-enabled').checked,
+      server_url: document.getElementById('cfg-immich-url').value.trim(),
+      api_key: document.getElementById('cfg-immich-key').value.trim(),
+      album_id: document.getElementById('cfg-immich-album').value.trim()
+    },
+    home_assistant: {
+      enabled: document.getElementById('cfg-ha-enabled').checked,
+      base_url: document.getElementById('cfg-ha-url').value.trim(),
+      access_token: document.getElementById('cfg-ha-token').value.trim(),
+      default_light_entity: document.getElementById('cfg-ha-light').value.trim()
+    },
+    hermes: {
+      enabled: document.getElementById('cfg-hermes-enabled').checked,
+      endpoint: document.getElementById('cfg-hermes-endpoint').value.trim()
+    },
+    screensaver: {
+      return_after_seconds: parseInt(document.getElementById('cfg-idle-seconds').value, 10) || 10,
+      photo_interval_seconds: parseInt(document.getElementById('cfg-photo-interval').value, 10) || 30
+    }
+  };
+
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      if (btn) btn.textContent = "Saved!";
+      // Reload photos if immich is enabled
+      if (payload.immich.enabled) {
+        fetch('/api/photos').then(r => r.json()).then(data => {
+          if (data.photos && data.photos.length > 0 && typeof SLIDESHOW_PHOTOS !== 'undefined') {
+            data.photos.forEach(p => SLIDESHOW_PHOTOS.unshift({ url: p.url, isDark: true, title: p.title }));
+          }
+        }).catch(() => {});
+      }
+      setTimeout(() => {
+        closeSettingsModal();
+        if (btn) btn.textContent = "Save & Apply";
+      }, 700);
+    }
+  } catch (err) {
+    if (btn) btn.textContent = "Error saving";
+    setTimeout(() => { if (btn) btn.textContent = "Save & Apply"; }, 2000);
+  }
+}

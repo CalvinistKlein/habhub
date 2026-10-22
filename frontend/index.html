@@ -184,6 +184,9 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
         <span class="update-badge hidden" id="update-badge"></span>
       </button>
+      <button class="dock-icon-btn" id="dock-btn-settings" onclick="openSettingsModal(event)" title="Settings & Integration Keys">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
       <button class="dock-icon-btn" id="dock-btn-fullscreen" onclick="toggleFullscreen(event)" title="Toggle Fullscreen">
         <svg class="icon-fs-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
         <svg class="icon-fs-exit hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7"/></svg>
@@ -265,6 +268,101 @@
       <div class="modal-actions">
         <button class="modal-btn secondary" id="btn-check-update" onclick="checkGitHubUpdate()">Check GitHub</button>
         <button class="modal-btn primary" id="btn-redeploy-now" onclick="triggerSystemRedeploy()">Update & Redeploy</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================
+       SETTINGS & CONFIGURATION MODAL
+       =================================================================== -->
+  <div id="modal-settings" class="omni-modal hidden" onclick="event.stopPropagation()">
+    <div class="omni-modal-content settings-modal-content">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h3>OmniHub Settings & Integrations</h3>
+          <span class="commit-chip">Immich · Home Assistant · Hermes AI</span>
+        </div>
+        <button class="modal-close-btn" onclick="closeSettingsModal()">&times;</button>
+      </div>
+
+      <div class="settings-tabs">
+        <button class="settings-tab-btn active" data-tab="tab-immich" onclick="switchSettingsTab('tab-immich')">Immich Photos</button>
+        <button class="settings-tab-btn" data-tab="tab-ha" onclick="switchSettingsTab('tab-ha')">Home Assistant</button>
+        <button class="settings-tab-btn" data-tab="tab-hermes" onclick="switchSettingsTab('tab-hermes')">Hermes AI</button>
+        <button class="settings-tab-btn" data-tab="tab-display" onclick="switchSettingsTab('tab-display')">Display</button>
+      </div>
+
+      <div class="modal-body settings-body">
+        <!-- IMMICH TAB -->
+        <div class="settings-tab-pane active" id="tab-immich">
+          <div class="form-row toggle-row">
+            <label for="cfg-immich-enabled">Enable Immich Photo Frame</label>
+            <input type="checkbox" id="cfg-immich-enabled" class="toggle-switch">
+          </div>
+          <div class="form-row">
+            <label for="cfg-immich-url">Immich Server URL</label>
+            <input type="text" id="cfg-immich-url" class="settings-input" placeholder="http://immich.local:2283">
+          </div>
+          <div class="form-row">
+            <label for="cfg-immich-key">Immich API Key</label>
+            <input type="password" id="cfg-immich-key" class="settings-input" placeholder="Your Immich API Key">
+          </div>
+          <div class="form-row">
+            <label for="cfg-immich-album">Album ID (Optional)</label>
+            <input type="text" id="cfg-immich-album" class="settings-input" placeholder="Leave empty for all photos/timeline">
+          </div>
+          <button class="test-conn-btn" id="btn-test-immich" onclick="testImmichConnection()">Test & Fetch Immich Photos</button>
+          <div class="test-feedback" id="feedback-immich"></div>
+        </div>
+
+        <!-- HOME ASSISTANT TAB -->
+        <div class="settings-tab-pane" id="tab-ha">
+          <div class="form-row toggle-row">
+            <label for="cfg-ha-enabled">Enable Home Assistant</label>
+            <input type="checkbox" id="cfg-ha-enabled" class="toggle-switch">
+          </div>
+          <div class="form-row">
+            <label for="cfg-ha-url">Home Assistant Base URL</label>
+            <input type="text" id="cfg-ha-url" class="settings-input" placeholder="http://homeassistant.local:8123">
+          </div>
+          <div class="form-row">
+            <label for="cfg-ha-token">Long-Lived Access Token</label>
+            <input type="password" id="cfg-ha-token" class="settings-input" placeholder="Bearer Token">
+          </div>
+          <div class="form-row">
+            <label for="cfg-ha-light">Default Light Entity</label>
+            <input type="text" id="cfg-ha-light" class="settings-input" placeholder="light.living_room">
+          </div>
+        </div>
+
+        <!-- HERMES AI TAB -->
+        <div class="settings-tab-pane" id="tab-hermes">
+          <div class="form-row toggle-row">
+            <label for="cfg-hermes-enabled">Enable Hermes LAN Node</label>
+            <input type="checkbox" id="cfg-hermes-enabled" class="toggle-switch">
+          </div>
+          <div class="form-row">
+            <label for="cfg-hermes-endpoint">Hermes Endpoint URL</label>
+            <input type="text" id="cfg-hermes-endpoint" class="settings-input" placeholder="http://hermes-node.local:8080">
+          </div>
+        </div>
+
+        <!-- DISPLAY TAB -->
+        <div class="settings-tab-pane" id="tab-display">
+          <div class="form-row">
+            <label for="cfg-idle-seconds">Idle Timeout to Screensaver (Seconds)</label>
+            <input type="number" id="cfg-idle-seconds" class="settings-input" min="5" max="300" placeholder="10">
+          </div>
+          <div class="form-row">
+            <label for="cfg-photo-interval">Photo Interval (Seconds)</label>
+            <input type="number" id="cfg-photo-interval" class="settings-input" min="10" max="300" placeholder="30">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="modal-btn secondary" onclick="closeSettingsModal()">Cancel</button>
+        <button class="modal-btn primary" id="btn-save-settings" onclick="saveSettings()">Save & Apply</button>
       </div>
     </div>
   </div>

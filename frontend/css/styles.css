@@ -977,3 +977,127 @@ body.mode-map #expand-pill-label { content: "Dashboard"; }
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* ==========================================================================
+   SETTINGS MODAL & FORM CONTROLS
+   ========================================================================== */
+.settings-modal-content {
+  max-width: 620px;
+}
+.settings-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+  overflow-x: auto;
+}
+.settings-tab-btn {
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bone-dim);
+  background: transparent;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.settings-tab-btn.active {
+  color: var(--obsidian);
+  background: var(--bone);
+}
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.settings-tab-pane {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+}
+.settings-tab-pane.active {
+  display: flex;
+}
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-row.toggle-row {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.form-row label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bone-dim);
+}
+.settings-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--bone);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.settings-input:focus {
+  border-color: var(--amber);
+  background: rgba(255, 255, 255, 0.09);
+}
+.toggle-switch {
+  appearance: none;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  position: relative;
+  outline: none;
+  cursor: pointer;
+  transition: background 0.25s;
+}
+.toggle-switch::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bone);
+  transition: transform 0.25s;
+}
+.toggle-switch:checked {
+  background: var(--amber);
+}
+.toggle-switch:checked::before {
+  transform: translateX(20px);
+}
+.test-conn-btn {
+  background: rgba(242, 180, 109, 0.14);
+  border: 1px solid rgba(242, 180, 109, 0.3);
+  color: var(--amber);
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  align-self: flex-start;
+  transition: all 0.2s;
+}
+.test-conn-btn:active {
+  transform: scale(0.97);
+}
+.test-feedback {
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--bone-dim);
+  padding: 4px 2px;
+}
