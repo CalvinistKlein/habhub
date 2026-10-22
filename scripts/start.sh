@@ -120,14 +120,13 @@ fi
 
 # 5. Dedicated Kiosk Flags
 # --user-data-dir ensures an isolated profile so it NEVER opens as a tab in an existing browser session.
-# --ozone-platform=x11 forces Xwayland compatibility which ensures GNOME Mutter completely hides the top bar.
+# --ozone-platform-hint=auto allows native Wayland rendering on modern Linux/GNOME for smooth, borderless kiosk mode.
 KIOSK_FLAGS=(
     "--user-data-dir=${KIOSK_PROFILE}"
     "--kiosk"
     "--start-fullscreen"
     "--start-maximized"
-    "--ozone-platform=x11"
-    "--window-position=0,0"
+    "--ozone-platform-hint=auto"
     "--no-first-run"
     "--no-default-browser-check"
     "--noerrdialogs"

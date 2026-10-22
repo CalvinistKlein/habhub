@@ -112,16 +112,13 @@ function toggleFullscreen(e) {
 function updateFullscreenIcon() {
   const enterIcon = document.querySelector('#dock-btn-fullscreen .icon-fs-enter');
   const exitIcon = document.querySelector('#dock-btn-fullscreen .icon-fs-exit');
-  const promptBanner = document.getElementById('fullscreen-prompt');
 
   if (document.fullscreenElement) {
     if (enterIcon) enterIcon.classList.add('hidden');
     if (exitIcon) exitIcon.classList.remove('hidden');
-    if (promptBanner) promptBanner.classList.add('hidden');
   } else {
     if (enterIcon) enterIcon.classList.remove('hidden');
     if (exitIcon) exitIcon.classList.add('hidden');
-    if (promptBanner) promptBanner.classList.remove('hidden');
   }
 }
 

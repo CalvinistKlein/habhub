@@ -47,43 +47,6 @@ button {
 .hidden { display: none !important; }
 
 /* ==========================================================================
-   FLOATING FULLSCREEN ACTIVATION BANNER
-   ========================================================================== */
-.fullscreen-prompt-banner {
-  position: fixed;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 99999;
-  background: rgba(242, 180, 109, 0.95);
-  color: #0c0a09;
-  padding: 10px 22px;
-  border-radius: 30px;
-  font-size: 13px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.7);
-  cursor: pointer;
-  animation: bounce-prompt 2.5s infinite;
-  transition: opacity 0.3s, transform 0.3s;
-}
-.fullscreen-prompt-banner.hidden {
-  display: none !important;
-}
-.fullscreen-prompt-banner svg {
-  width: 18px;
-  height: 18px;
-  stroke: #0c0a09;
-  flex-shrink: 0;
-}
-@keyframes bounce-prompt {
-  0%, 100% { transform: translate(-50%, 0); }
-  50% { transform: translate(-50%, -4px); }
-}
-
-/* ==========================================================================
    STAGE — Dynamic Android Auto / CarPlay Grid
    ========================================================================== */
 .stage {
