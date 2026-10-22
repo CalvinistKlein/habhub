@@ -103,6 +103,10 @@ elif command -v chromium > /dev/null 2>&1; then
     BROWSER_BIN="chromium"
 elif command -v google-chrome > /dev/null 2>&1; then
     BROWSER_BIN="google-chrome"
+elif command -v brave-browser > /dev/null 2>&1; then
+    BROWSER_BIN="brave-browser"
+elif command -v brave > /dev/null 2>&1; then
+    BROWSER_BIN="brave"
 elif command -v firefox > /dev/null 2>&1; then
     BROWSER_BIN="firefox"
 fi
@@ -115,11 +119,11 @@ if [ -z "$BROWSER_BIN" ]; then
 fi
 
 # 5. Dedicated Kiosk Flags
-# --user-data-dir ensures an isolated profile so it NEVER opens as a tab in an existing browser session
+# --user-data-dir ensures an isolated profile so it NEVER opens as a tab in an existing browser session.
+# Note: Passing the URL directly (instead of --app=...) ensures Chromium honors --kiosk on all Linux window managers.
 KIOSK_FLAGS=(
     "--user-data-dir=${KIOSK_PROFILE}"
     "--kiosk"
-    "--app=${APP_URL}"
     "--start-fullscreen"
     "--start-maximized"
     "--ozone-platform-hint=auto"
@@ -139,8 +143,6 @@ KIOSK_FLAGS=(
     "--autoplay-policy=no-user-gesture-required"
     "--password-store=basic"
     "--class=OmniHubKiosk"
-    "--window-size=1920,1280"
-    "--window-position=0,0"
 )
 
 echo "[Launcher] Launching ${BROWSER_BIN} in isolated kiosk mode..."
@@ -148,7 +150,7 @@ if [ "$BROWSER_BIN" == "firefox" ]; then
     firefox --kiosk "${APP_URL}" &
     BROWSER_PID=$!
 else
-    "$BROWSER_BIN" "${KIOSK_FLAGS[@]}" &
+    "$BROWSER_BIN" "${KIOSK_FLAGS[@]}" "${APP_URL}" &
     BROWSER_PID=$!
 fi
 

@@ -255,7 +255,7 @@ def list_backups():
     return backups
 
 # ==============================================================================
-# ALARMS & PREFERENCES HELPERS
+# ALARMS & TIMERS HELPERS
 # ==============================================================================
 
 def get_alarms():
@@ -265,6 +265,58 @@ def get_alarms():
     rows = [dict(r) for r in c.fetchall()]
     conn.close()
     return rows
+
+def toggle_alarm(alarm_id, enabled=None):
+    conn = get_connection()
+    c = conn.cursor()
+    if enabled is None:
+        c.execute("UPDATE alarms SET enabled = 1 - enabled WHERE id = ?", (alarm_id,))
+    else:
+        c.execute("UPDATE alarms SET enabled = ? WHERE id = ?", (1 if enabled else 0, alarm_id))
+    conn.commit()
+    c.execute("SELECT * FROM alarms WHERE id = ?", (alarm_id,))
+    row = c.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_timers():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM timers ORDER BY id DESC")
+    rows = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return rows
+
+def create_timer(duration_seconds=300, label="Kitchen Timer"):
+    conn = get_connection()
+    c = conn.cursor()
+    now = time.time()
+    c.execute("""
+        INSERT INTO timers (duration_seconds, remaining_seconds, label, status, started_at, updated_at)
+        VALUES (?, ?, ?, 'running', ?, ?)
+    """, (duration_seconds, duration_seconds, label, now, now))
+    timer_id = c.lastrowid
+    conn.commit()
+    c.execute("SELECT * FROM timers WHERE id = ?", (timer_id,))
+    row = c.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def delete_timer(timer_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM timers WHERE id = ?", (timer_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+def clear_timers():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM timers")
+    conn.commit()
+    conn.close()
+    return True
 
 def set_kv(key, value):
     conn = get_connection()

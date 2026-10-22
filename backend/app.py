@@ -11,7 +11,10 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 from backend.config import CONFIG, save_config
-from backend.database import init_db, get_alarms, set_kv, get_kv, backup_database, list_backups
+from backend.database import (
+    init_db, get_alarms, toggle_alarm, get_timers, create_timer,
+    delete_timer, clear_timers, set_kv, get_kv, backup_database, list_backups
+)
 from backend.services.weather_service import weather_service
 from backend.services.media_service import media_service
 from backend.services.ai_router import ai_router
@@ -76,6 +79,17 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
         elif path == "/api/alarms":
             data = get_alarms()
             self._send_json({"alarms": data})
+            return
+
+        elif path == "/api/timers":
+            data = get_timers()
+            self._send_json({"timers": data})
+            return
+
+        elif path == "/api/system/check_update":
+            data = updater_service.check_for_updates()
+            status = updater_service.get_status()
+            self._send_json(status)
             return
 
         elif path == "/api/location":
@@ -168,9 +182,37 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
                 self._send_json({"status": "error", "message": "latitude and longitude required"}, status_code=400)
             return
 
+        elif path == "/api/alarms/toggle":
+            alarm_id = payload.get("id", 1)
+            enabled = payload.get("enabled", None)
+            alarm = toggle_alarm(alarm_id, enabled)
+            self._send_json({"status": "success", "alarm": alarm})
+            return
+
+        elif path == "/api/timers":
+            duration = payload.get("duration", 300)
+            label = payload.get("label", "Kitchen Timer")
+            timer = create_timer(duration, label)
+            self._send_json({"status": "success", "timer": timer})
+            return
+
+        elif path == "/api/timers/delete":
+            timer_id = payload.get("id")
+            if timer_id:
+                delete_timer(timer_id)
+            else:
+                clear_timers()
+            self._send_json({"status": "success"})
+            return
+
         elif path == "/api/system/update":
             res = updater_service.trigger_update()
             self._send_json(res)
+            return
+
+        elif path == "/api/system/restart":
+            updater_service.schedule_restart(delay_seconds=1.0)
+            self._send_json({"status": "success", "message": "OmniHub service is restarting."})
             return
 
         elif path == "/api/system/backup":

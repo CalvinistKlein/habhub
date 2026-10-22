@@ -124,6 +124,7 @@ class UpdaterService:
                     self.state["last_updated_at"] = time.time()
                     self.state["frontend_reload_flag"] = True
                     self._record_history("success", "Update succeeded", self.state["current_commit"])
+                    self.schedule_restart(delay_seconds=1.5)
                 else:
                     self._record_history("failed", "Update script returned error", self.state["current_commit"])
             except Exception as e:
@@ -172,5 +173,20 @@ class UpdaterService:
         flag = self.state["frontend_reload_flag"]
         self.state["frontend_reload_flag"] = False
         return flag
+
+    def schedule_restart(self, delay_seconds=1.5):
+        def _restart():
+            time.sleep(delay_seconds)
+            print("[UpdaterService] Shutting down and redeploying OmniHub...")
+            try:
+                res = subprocess.run(["systemctl", "--user", "is-active", "--quiet", "omnihub.service"], capture_output=True)
+                if res.returncode == 0:
+                    subprocess.run(["systemctl", "--user", "restart", "omnihub.service"])
+                    return
+            except Exception:
+                pass
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        threading.Thread(target=_restart, daemon=True).start()
 
 updater_service = UpdaterService()
