@@ -115,7 +115,7 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
             return
 
         elif path == "/api/settings":
-            for section in ("immich", "home_assistant", "hermes", "screensaver", "location", "map", "media"):
+            for section in ("immich", "home_assistant", "hermes", "screensaver", "alarms", "location", "map", "media"):
                 if section in payload:
                     if isinstance(payload[section], dict) and isinstance(CONFIG.get(section), dict):
                         CONFIG[section].update(payload[section])
@@ -208,7 +208,7 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
             return
 
         elif path == "/api/settings":
-            for section in ("immich", "home_assistant", "hermes", "screensaver", "location", "map", "media"):
+            for section in ("immich", "home_assistant", "hermes", "screensaver", "alarms", "location", "map", "media"):
                 if section in payload:
                     if isinstance(payload[section], dict) and isinstance(CONFIG.get(section), dict):
                         CONFIG[section].update(payload[section])
@@ -244,6 +244,12 @@ class OmniHubRequestHandler(BaseHTTPRequestHandler):
         elif path == "/api/alarms/dismiss":
             alarm_service.dismiss()
             self._send_json({"status": "success", "message": "Alarm dismissed"})
+            return
+
+        elif path == "/api/alarms/snooze":
+            minutes = payload.get("minutes")
+            res = alarm_service.snooze(minutes)
+            self._send_json(res)
             return
 
         elif path == "/api/timers":

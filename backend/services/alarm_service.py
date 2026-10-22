@@ -1,6 +1,7 @@
 import time
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
+from backend.config import CONFIG
 from backend.database import get_alarms, toggle_alarm
 from backend.services.voice_pipeline import voice_pipeline
 
@@ -10,6 +11,7 @@ class AlarmService:
         self._thread = None
         self.active_alarm = None
         self._last_triggered_minute = None
+        self.snooze_alarm = None
 
     def start(self):
         if self._running:
@@ -37,6 +39,15 @@ class AlarmService:
         if self._last_triggered_minute == current_minute_key:
             return  # Already fired this minute
 
+        # 1. Check temporary snooze alarm
+        if self.snooze_alarm and self.snooze_alarm.get("time_str") == current_time_str:
+            self._last_triggered_minute = current_minute_key
+            alarm_to_fire = self.snooze_alarm
+            self.snooze_alarm = None
+            self._trigger_alarm(alarm_to_fire)
+            return
+
+        # 2. Check persistent database alarms
         alarms = get_alarms()
         for a in alarms:
             if not a.get("enabled"):
@@ -51,11 +62,13 @@ class AlarmService:
                 break
 
     def _trigger_alarm(self, alarm):
-        print(f"[AlarmService] ALARM TRIGGERED: {alarm.get('label')} at {alarm.get('time_str')}")
+        sound = CONFIG.get("alarms", {}).get("sound", "gentle_chime")
+        print(f"[AlarmService] ALARM TRIGGERED: {alarm.get('label')} at {alarm.get('time_str')} (Sound: {sound})")
         self.active_alarm = {
             "id": alarm.get("id"),
             "time_str": alarm.get("time_str"),
             "label": alarm.get("label", "Morning Alarm"),
+            "sound": sound,
             "triggered_at": time.time()
         }
 
@@ -75,10 +88,32 @@ class AlarmService:
             return True
         return False
 
+    def snooze(self, minutes=None):
+        if minutes is None:
+            minutes = CONFIG.get("alarms", {}).get("snooze_minutes", 5)
+        if self.active_alarm:
+            target_time = (datetime.now() + timedelta(minutes=minutes)).strftime("%H:%M")
+            orig_label = self.active_alarm.get("label", "Alarm")
+            print(f"[AlarmService] Alarm snoozed for {minutes}m until {target_time}")
+            self.snooze_alarm = {
+                "id": -1,
+                "time_str": target_time,
+                "label": f"Snoozed ({orig_label})",
+                "voice_briefing": False,
+                "enabled": 1,
+                "days": "1,2,3,4,5,6,7"
+            }
+            self.active_alarm = None
+            return {"status": "snoozed", "until": target_time, "minutes": minutes}
+        return {"status": "no_active_alarm"}
+
     def get_state(self):
+        sound = CONFIG.get("alarms", {}).get("sound", "gentle_chime")
         return {
             "active_alarm": self.active_alarm,
-            "is_ringing": self.active_alarm is not None
+            "is_ringing": self.active_alarm is not None,
+            "sound": sound,
+            "snoozed_until": self.snooze_alarm.get("time_str") if self.snooze_alarm else None
         }
 
 alarm_service = AlarmService()

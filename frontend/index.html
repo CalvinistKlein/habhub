@@ -315,6 +315,7 @@
       <div class="settings-tabs">
         <button class="settings-tab-btn active" data-tab="tab-immich" onclick="switchSettingsTab('tab-immich')">Immich Photos</button>
         <button class="settings-tab-btn" data-tab="tab-ha" onclick="switchSettingsTab('tab-ha')">Home Assistant</button>
+        <button class="settings-tab-btn" data-tab="tab-alarms" onclick="switchSettingsTab('tab-alarms')">Alarms & Sounds</button>
         <button class="settings-tab-btn" data-tab="tab-hermes" onclick="switchSettingsTab('tab-hermes')">Hermes AI</button>
         <button class="settings-tab-btn" data-tab="tab-display" onclick="switchSettingsTab('tab-display')">Display</button>
       </div>
@@ -374,6 +375,43 @@
           </div>
         </div>
 
+        <!-- ALARMS & SOUNDS TAB -->
+        <div class="settings-tab-pane" id="tab-alarms">
+          <div class="form-row">
+            <label for="cfg-alarm-time">Default Alarm Time</label>
+            <input type="time" id="cfg-alarm-time" class="settings-input" value="06:30">
+          </div>
+          <div class="form-row">
+            <label for="cfg-alarm-label">Alarm Label</label>
+            <input type="text" id="cfg-alarm-label" class="settings-input" placeholder="Morning Briefing">
+          </div>
+          <div class="form-row">
+            <label for="cfg-alarm-sound">Alarm Tone</label>
+            <div class="tone-preview-row">
+              <select id="cfg-alarm-sound" class="settings-input" onchange="previewSelectedAlarmSound()">
+                <option value="gentle_chime">Gentle Chime (Harmonic Triad)</option>
+                <option value="sunrise_bells">Sunrise Bells (Pentatonic Chimes)</option>
+                <option value="digital_beep">Digital Watch (Classic Pulse)</option>
+                <option value="radar_pulse">Radar Pulse (Sonar Sweep)</option>
+                <option value="marimba_bounce">Marimba Bounce (Warm Acoustic)</option>
+              </select>
+              <button type="button" class="tone-preview-btn" id="btn-preview-tone" onclick="previewSelectedAlarmSound()">🔊 Test Tone</button>
+            </div>
+          </div>
+          <div class="form-row toggle-row">
+            <label for="cfg-alarm-voice">Vocal Weather & Schedule Briefing</label>
+            <input type="checkbox" id="cfg-alarm-voice" class="toggle-switch" checked>
+          </div>
+          <div class="form-row">
+            <label for="cfg-alarm-snooze">Snooze Duration</label>
+            <select id="cfg-alarm-snooze" class="settings-input">
+              <option value="5">5 Minutes</option>
+              <option value="10">10 Minutes</option>
+              <option value="15">15 Minutes</option>
+            </select>
+          </div>
+        </div>
+
         <!-- DISPLAY TAB -->
         <div class="settings-tab-pane" id="tab-display">
           <div class="form-row">
@@ -410,7 +448,10 @@
       </svg>
       <div class="alarm-ring-time" id="alarm-ring-time">06:30</div>
       <div class="alarm-ring-label" id="alarm-ring-label">Morning Alarm</div>
-      <button class="alarm-dismiss-btn" id="btn-alarm-dismiss" onclick="dismissRingingAlarm()">DISMISS ALARM</button>
+      <div class="alarm-actions-row">
+        <button class="alarm-snooze-btn" id="btn-alarm-snooze" onclick="snoozeRingingAlarm()">SNOOZE (5m)</button>
+        <button class="alarm-dismiss-btn" id="btn-alarm-dismiss" onclick="dismissRingingAlarm()">DISMISS</button>
+      </div>
     </div>
   </div>
 

@@ -85,8 +85,25 @@ cleanup() {
     if [ -n "$BACKEND_PID" ]; then
         kill "$BACKEND_PID" 2>/dev/null || true
     fi
+    restore_gnome_panel
 }
 trap cleanup EXIT INT TERM
+
+# GNOME Shell Panel Management (Ensures complete full-bleed kiosk without top bar)
+hide_gnome_panel() {
+    gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Eval "Main.panel.hide();" 2>/dev/null || \
+    gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Eval "Main.panel.actor.hide();" 2>/dev/null || true
+    gsettings set org.gnome.shell.extensions.just-perfection panel false 2>/dev/null || true
+    gsettings set org.gnome.shell.extensions.dash-to-dock autohide true 2>/dev/null || true
+}
+
+restore_gnome_panel() {
+    gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Eval "Main.panel.show();" 2>/dev/null || \
+    gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Eval "Main.panel.actor.show();" 2>/dev/null || true
+    gsettings set org.gnome.shell.extensions.just-perfection panel true 2>/dev/null || true
+}
+
+hide_gnome_panel
 
 # 3. Prevent Display Sleeping / DPMS on Surface Go 2
 if [ -n "$DISPLAY" ] && command -v xset > /dev/null 2>&1; then
@@ -119,14 +136,35 @@ if [ -z "$BROWSER_BIN" ]; then
 fi
 
 # 5. Dedicated Kiosk Flags
-# --user-data-dir ensures an isolated profile so it NEVER opens as a tab in an existing browser session.
-# --ozone-platform-hint=auto allows native Wayland rendering on modern Linux/GNOME for smooth, borderless kiosk mode.
+# Clear cached window geometries so browser never restores a windowed state
+rm -f "${KIOSK_PROFILE}/Default/Preferences" 2>/dev/null || true
+
+PLATFORM_FLAGS=()
+if [ -n "$WAYLAND_DISPLAY" ]; then
+    echo "[Launcher] Native Wayland compositor detected (${WAYLAND_DISPLAY}). Enforcing direct Wayland surface..."
+    PLATFORM_FLAGS+=(
+        "--ozone-platform=wayland"
+        "--enable-features=UseOzonePlatform,WaylandWindowDecorations"
+    )
+elif [ -n "$DISPLAY" ]; then
+    echo "[Launcher] X11 display detected (${DISPLAY}). Enforcing X11 mode..."
+    PLATFORM_FLAGS+=(
+        "--ozone-platform=x11"
+    )
+else
+    PLATFORM_FLAGS+=(
+        "--ozone-platform-hint=auto"
+    )
+fi
+
 KIOSK_FLAGS=(
     "--user-data-dir=${KIOSK_PROFILE}"
     "--kiosk"
     "--start-fullscreen"
     "--start-maximized"
-    "--ozone-platform-hint=auto"
+    "--window-position=0,0"
+    "--window-size=1920,1280"
+    "${PLATFORM_FLAGS[@]}"
     "--no-first-run"
     "--no-default-browser-check"
     "--noerrdialogs"
@@ -160,6 +198,7 @@ echo "[Launcher] Kiosk Browser PID: ${BROWSER_PID}"
 (
     for sec in 1 2 4 6; do
         sleep "$sec"
+        hide_gnome_panel
         # Ensure window manager flags window as fullscreen
         if [ -n "$DISPLAY" ] && command -v wmctrl > /dev/null 2>&1; then
             wmctrl -r "OmniHub" -b add,fullscreen 2>/dev/null || true

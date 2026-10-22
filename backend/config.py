@@ -62,6 +62,15 @@ DEFAULT_CONFIG = {
         "paused_grace_seconds": 60        # Keep player visible this long after pausing, then hide
     },
 
+    # Alarms & Smart Wakeup
+    "alarms": {
+        "sound": "gentle_chime",          # gentle_chime, sunrise_bells, digital_beep, radar_pulse, marimba_bounce
+        "time": "06:30",
+        "label": "Morning Briefing",
+        "voice_briefing": True,
+        "snooze_minutes": 5
+    },
+
     # Idle behaviour: return to the photo or aquarium screensaver after inactivity
     "screensaver": {
         "mode": "aquarium",               # "aquarium" (living reef) or "photos" (slideshow/immich)

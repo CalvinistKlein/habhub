@@ -106,6 +106,13 @@ class TestOmniHub(unittest.TestCase):
         state = svc.get_state()
         self.assertFalse(state["is_ringing"])
 
+        # Snooze test
+        svc._trigger_alarm({"id": 100, "time_str": "07:00", "label": "Snooze Test", "voice_briefing": False})
+        snooze_res = svc.snooze(minutes=5)
+        self.assertEqual(snooze_res["status"], "snoozed")
+        self.assertFalse(svc.get_state()["is_ringing"])
+        self.assertIsNotNone(svc.get_state()["snoozed_until"])
+
     def test_weather_service_fallback(self):
         fb = weather_service._fallback_weather()
         self.assertIn("current", fb)

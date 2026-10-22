@@ -150,9 +150,8 @@ function initAutoFullscreen() {
   updateFullscreenIcon();
 
   // Capture phase ensures user gestures anywhere on the screen trigger fullscreen
-  window.addEventListener('click', requestFS, { capture: true, once: true });
-  window.addEventListener('touchstart', requestFS, { capture: true, once: true });
-  window.addEventListener('pointerdown', requestFS, { capture: true, once: true });
+  window.addEventListener('click', requestFS, { capture: true });
+  window.addEventListener('touchend', requestFS, { capture: true });
 
   // Keyboard shortcut: F11 or 'f' to toggle fullscreen
   window.addEventListener('keydown', (e) => {
@@ -582,6 +581,19 @@ async function openSettingsModal(e) {
       if (herEnabled) herEnabled.checked = Boolean(her.enabled);
       if (herEndpoint) herEndpoint.value = her.endpoint || '';
 
+      // Alarms & Smart Wakeup
+      const al = cfg.alarms || {};
+      const alTime = document.getElementById('cfg-alarm-time');
+      const alLabel = document.getElementById('cfg-alarm-label');
+      const alSound = document.getElementById('cfg-alarm-sound');
+      const alVoice = document.getElementById('cfg-alarm-voice');
+      const alSnooze = document.getElementById('cfg-alarm-snooze');
+      if (alTime) alTime.value = al.time || '06:30';
+      if (alLabel) alLabel.value = al.label || 'Morning Briefing';
+      if (alSound) alSound.value = al.sound || 'gentle_chime';
+      if (alVoice) alVoice.checked = al.voice_briefing !== false;
+      if (alSnooze) alSnooze.value = String(al.snooze_minutes || 5);
+
       // Display
       const ss = cfg.screensaver || {};
       const ssMode = document.getElementById('cfg-screensaver-mode');
@@ -671,6 +683,13 @@ async function saveSettings() {
       enabled: document.getElementById('cfg-hermes-enabled').checked,
       endpoint: document.getElementById('cfg-hermes-endpoint').value.trim()
     },
+    alarms: {
+      time: document.getElementById('cfg-alarm-time') ? document.getElementById('cfg-alarm-time').value : '06:30',
+      label: document.getElementById('cfg-alarm-label') ? document.getElementById('cfg-alarm-label').value.trim() : 'Morning Briefing',
+      sound: document.getElementById('cfg-alarm-sound') ? document.getElementById('cfg-alarm-sound').value : 'gentle_chime',
+      voice_briefing: document.getElementById('cfg-alarm-voice') ? document.getElementById('cfg-alarm-voice').checked : true,
+      snooze_minutes: parseInt(document.getElementById('cfg-alarm-snooze').value, 10) || 5
+    },
     screensaver: {
       mode: document.getElementById('cfg-screensaver-mode') ? document.getElementById('cfg-screensaver-mode').value : 'aquarium',
       return_after_seconds: parseInt(document.getElementById('cfg-idle-seconds').value, 10) || 10,
@@ -710,7 +729,7 @@ async function saveSettings() {
 }
 
 // =============================================================================
-// SYNTHESIZED WEB AUDIO CHIMES & ALARM ENGINE
+// SYNTHESIZED WEB AUDIO CHIMES & MULTI-TONE ALARM ENGINE
 // =============================================================================
 let audioCtx = null;
 function getAudioContext() {
@@ -745,31 +764,133 @@ function playTimerChime() {
   });
 }
 
-// Continuous pleasant pulsing chime for Alarm Ringing
+// Multi-tone Synthesized Alarm Engine
+function playSingleAlarmBurst(toneType) {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+
+  switch (toneType) {
+    case 'sunrise_bells': {
+      // Pentatonic Japanese temple bells (D5, F#5, A5, D6) with resonant bell decay
+      const notes = [587.33, 739.99, 880.00, 1174.66];
+      notes.forEach((freq, i) => {
+        const t = now + i * 0.14;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.35, t + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.85);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.9);
+      });
+      break;
+    }
+
+    case 'digital_beep': {
+      // Classic 80s dual-frequency digital watch staccato beeps (beep-beep beep-beep)
+      const freqs = [2048, 2560];
+      [0, 0.12, 0.32, 0.44].forEach((offset) => {
+        const t = now + offset;
+        freqs.forEach((freq) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.07, t);
+          gain.gain.setValueAtTime(0, t + 0.07);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t);
+          osc.stop(t + 0.08);
+        });
+      });
+      break;
+    }
+
+    case 'radar_pulse': {
+      // Modern dynamic sonar sweep
+      [0, 0.28].forEach((offset) => {
+        const t = now + offset;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(750, t);
+        osc.frequency.exponentialRampToValueAtTime(1450, t + 0.22);
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.36, t + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.25);
+      });
+      break;
+    }
+
+    case 'marimba_bounce': {
+      // Warm acoustic wooden marimba arpeggio (G4, B4, D5, G5)
+      const notes = [392.00, 493.88, 587.33, 783.99];
+      notes.forEach((freq, i) => {
+        const t = now + i * 0.11;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(0.40, t);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.46);
+      });
+      break;
+    }
+
+    case 'gentle_chime':
+    default: {
+      // Harmonic C-Major rising triad
+      const chords = [523.25, 659.25, 783.99, 1046.50];
+      chords.forEach((freq, idx) => {
+        const t = now + idx * 0.12;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.32, t + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.60);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.60);
+      });
+      break;
+    }
+  }
+}
+
 let alarmChimeInterval = null;
-function startAlarmAudio() {
-  if (alarmChimeInterval) return;
-  const playPulse = () => {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-    const chords = [523.25, 659.25, 783.99]; // C Major arpeggio
-    chords.forEach((freq, idx) => {
-      const startTime = ctx.currentTime + idx * 0.12;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, startTime);
-      gain.gain.setValueAtTime(0, startTime);
-      gain.gain.linearRampToValueAtTime(0.32, startTime + 0.04);
-      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.55);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(startTime);
-      osc.stop(startTime + 0.55);
-    });
-  };
-  playPulse();
-  alarmChimeInterval = setInterval(playPulse, 1800);
+let currentPlayingTone = 'gentle_chime';
+
+function startAlarmAudio(toneType) {
+  if (alarmChimeInterval) clearInterval(alarmChimeInterval);
+  currentPlayingTone = toneType || 'gentle_chime';
+
+  let intervalMs = 1800;
+  if (currentPlayingTone === 'digital_beep') intervalMs = 1200;
+  else if (currentPlayingTone === 'radar_pulse') intervalMs = 1300;
+  else if (currentPlayingTone === 'sunrise_bells') intervalMs = 2100;
+  else if (currentPlayingTone === 'marimba_bounce') intervalMs = 1400;
+
+  playSingleAlarmBurst(currentPlayingTone);
+  alarmChimeInterval = setInterval(() => {
+    playSingleAlarmBurst(currentPlayingTone);
+  }, intervalMs);
 }
 
 function stopAlarmAudio() {
@@ -779,8 +900,24 @@ function stopAlarmAudio() {
   }
 }
 
+// Test / Preview tone from Settings
+function previewSelectedAlarmSound() {
+  const soundSelect = document.getElementById('cfg-alarm-sound');
+  const btn = document.getElementById('btn-preview-tone');
+  const soundName = soundSelect ? soundSelect.value : 'gentle_chime';
+
+  stopAlarmAudio();
+  playSingleAlarmBurst(soundName);
+
+  if (btn) {
+    const origText = btn.textContent;
+    btn.textContent = "🔊 Playing...";
+    setTimeout(() => { btn.textContent = origText; }, 1800);
+  }
+}
+
 // =============================================================================
-// ACTIVE ALARM WATCHER & DISMISSAL
+// ACTIVE ALARM WATCHER & SNOOZE / DISMISSAL
 // =============================================================================
 let alarmWatcherInterval = null;
 let isAlarmCurrentlyRinging = false;
@@ -806,7 +943,8 @@ async function checkActiveAlarm() {
           const labelEl = document.getElementById('alarm-ring-label');
           if (timeEl) timeEl.textContent = data.active_alarm.time_str || '--:--';
           if (labelEl) labelEl.textContent = data.active_alarm.label || 'Alarm';
-          startAlarmAudio();
+          const sound = data.active_alarm.sound || data.sound || 'gentle_chime';
+          startAlarmAudio(sound);
         }
       } else {
         if (isAlarmCurrentlyRinging) {
@@ -826,5 +964,23 @@ async function dismissRingingAlarm() {
   stopAlarmAudio();
   try {
     await fetch('/api/alarms/dismiss', { method: 'POST' });
+  } catch (e) {}
+}
+
+async function snoozeRingingAlarm() {
+  isAlarmCurrentlyRinging = false;
+  const modal = document.getElementById('modal-alarm-ringing');
+  if (modal) modal.classList.add('hidden');
+  stopAlarmAudio();
+
+  const snoozePill = document.getElementById('pill-alarm-sub');
+  if (snoozePill) snoozePill.textContent = "Snoozed 5m";
+
+  try {
+    await fetch('/api/alarms/snooze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minutes: 5 })
+    });
   } catch (e) {}
 }
