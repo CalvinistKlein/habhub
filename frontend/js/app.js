@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 5. Active Alarm Watcher
   startAlarmWatcher();
+
+  // 6. Home Assistant Initial Entity Sync
+  initLightState();
 });
 
 // Live Synchronized Clocks
@@ -406,9 +409,19 @@ async function toggleKitchenTimer(e) {
 }
 
 let lightsState = false;
-async function toggleLivingRoomLights(e) {
-  if (e) e.stopPropagation();
-  lightsState = !lightsState;
+
+async function initLightState() {
+  try {
+    const res = await fetch('/api/services/light/state');
+    if (res.ok) {
+      const data = await res.json();
+      lightsState = data.state === 'on';
+      updateLightPillUI();
+    }
+  } catch (e) {}
+}
+
+function updateLightPillUI() {
   const pill = document.getElementById('action-light-pill');
   const sub = document.getElementById('pill-light-sub');
   if (pill) {
@@ -420,12 +433,26 @@ async function toggleLivingRoomLights(e) {
       if (sub) sub.textContent = "OFF";
     }
   }
+}
+
+async function toggleLivingRoomLights(e) {
+  if (e) e.stopPropagation();
+  lightsState = !lightsState;
+  updateLightPillUI();
+
   try {
-    fetch('/api/ai/chat', {
+    const res = await fetch('/api/services/light/toggle', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: lightsState ? "turn on the lights" : "turn off the lights" })
+      body: JSON.stringify({ entity_id: 'light.living_room' })
     });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.state) {
+        lightsState = data.state === 'on';
+        updateLightPillUI();
+      }
+    }
   } catch (err) {}
 }
 

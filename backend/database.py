@@ -266,6 +266,26 @@ def get_alarms():
     conn.close()
     return rows
 
+def create_alarm(time_str, label="Alarm", days="1,2,3,4,5", voice_briefing=1):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO alarms (time_str, label, days, voice_briefing, enabled, created_at)
+        VALUES (?, ?, ?, ?, 1, ?)
+    """, (time_str, label, days, 1 if voice_briefing else 0, time.time()))
+    conn.commit()
+    alarm_id = c.lastrowid
+    conn.close()
+    return alarm_id
+
+def delete_alarm(alarm_id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM alarms WHERE id = ?", (alarm_id,))
+    conn.commit()
+    conn.close()
+    return True
+
 def toggle_alarm(alarm_id, enabled=None):
     conn = get_connection()
     c = conn.cursor()

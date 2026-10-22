@@ -66,20 +66,27 @@ class AIRouter:
             }
 
         # Lights
-        if "turn on the lights" in text or "lights on" in text or "toggle light" in text:
+        if "turn on the lights" in text or "lights on" in text:
+            res = ha_service.set_light_state("light.living_room", state="on")
+            return {
+                "intent": "light_control",
+                "response": "Living room lights turned on.",
+                "action": {"type": "light", "state": True}
+            }
+        if "turn off the lights" in text or "lights off" in text:
+            res = ha_service.set_light_state("light.living_room", state="off")
+            return {
+                "intent": "light_control",
+                "response": "Living room lights turned off.",
+                "action": {"type": "light", "state": False}
+            }
+        if "toggle light" in text or "lights" in text:
             res = ha_service.toggle_light("light.living_room")
             state_str = res.get("state", "on").upper()
             return {
                 "intent": "light_control",
                 "response": f"Living room lights turned {state_str}.",
                 "action": {"type": "light", "state": state_str == "ON"}
-            }
-        if "turn off the lights" in text or "lights off" in text:
-            res = ha_service.toggle_light("light.living_room")
-            return {
-                "intent": "light_control",
-                "response": "Living room lights turned off.",
-                "action": {"type": "light", "state": False}
             }
 
         # Alarms

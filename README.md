@@ -13,19 +13,31 @@ A high-performance, local-first smart display platform engineered for the Micros
 2. **Bottom-Anchored Typography & Ergonomic HUD**
    - Giant glanceable clock digits (112px font) with AM/PM indicator and date.
    - Live Open-Meteo weather capsule with temperature, humidity, NE wind vector, and air quality index.
-   - Quick action capsules for 6:30 AM briefing alarm, 5-minute kitchen timer, living room light control, and Hermes conversational agent.
+   - Quick action capsules for 6:30 AM briefing alarm, 5-minute kitchen timer with Web Audio chime, living room light control with Home Assistant sync, and Hermes conversational agent.
 
-3. **Immich Photo Frame Screensaver with Calibrated Contrast**
-   - Automatically enters full-bleed Ken Burns photo slideshow when idle.
-   - **Calibrated Contrast Engine**: Text dynamically evaluates background luminance against the dark bottom-left pine/twilight region of Yosemite ($L \le 0.30$). If the backdrop is darker than this threshold, text renders bone-white; otherwise, obsidian black.
-   - **Distraction-Free**: Watermarks removed, with only a minimalist bottom swipe bar remaining.
-   - **Bottom-Anchored Hero Stack**: Clock digits and Spotify Connect player aligned along the bottom edge.
+3. **Interactive Living Reef Aquarium & Immich Photo Frame**
+   - **Living Reef Aquarium**: Autonomous marine ecosystem featuring Clownfish ("Nemo", "Marlin"), Blue Tang ("Dory"), Yellow Tang ("Bubbles"), Angelfish, and schooling Neon Tetras.
+   - **Fish Lives & Behaviors**: Realistic hunger dynamics, boid flocking, startle reactions, curiosity around air bubbles, and autonomous foraging.
+   - **Interactive Tap-to-Feed**: Tap anywhere on the water to disperse sinking food flakes; hungry fish eagerly sprint to catch them, trigger bubble/heart particles, and play soft bubble-pop audio.
+   - **Immich Photo Slideshow**: Local & Immich photo ingestion with smooth Ken Burns transitions.
+   - **Dynamic Canvas Contrast Engine**: Evaluates background luminance with an offscreen canvas ($L \le 0.30$) to automatically select `tone-light` (bone-white) or `tone-dark` (obsidian black) typography.
+   - **Seamless Mode Switcher**: Quick toggle on the screensaver HUD or Settings to switch between Aquarium and Photos.
 
 4. **Integrated Borderless Spotify Connect Hero**
    - Auto-hides when no music is playing.
    - Full vertical height matching the clock and photo metadata.
    - 5-button tactile touch deck: Skip Back (Previous), Skip Back 15s (Seek -15s), Play/Pause, Skip Ahead 15s (Seek +15s), and Skip Next.
    - One-touch toggle to switch screensaver background between the photo and high-res album artwork.
+
+5. **Full-Bleed Morning Alarm & Web Audio Chimes**
+   - **Background Scheduler**: Checks active alarms against current time/weekday.
+   - **Ringing Modal**: High-contrast animated ringing screen with giant one-tap dismissal designed for sleepy wakeups on the Surface Go 2.
+   - **Piper Vocal Briefing**: Vocalizes morning weather and schedule when the alarm sounds.
+   - **Web Audio Chimes**: Ascending 3-tone chime for timer expiration and pulsing C-major triangle chime for alarm ringing.
+
+6. **In-UI Settings Console & One-Tap Git Redeploy**
+   - Dedicated Settings Modal for Immich API keys, Home Assistant tokens, Hermes LAN endpoints, and Screensaver timeouts.
+   - One-tap "Update & Redeploy" dock button with green pulse notification when new GitHub commits are detected. Safe backup, schema migration, and automatic restart.
 
 5. **Multi-Tier AI & Voice Architecture**
    - **Tier 1 (Local Zero-Latency)**: Instant local matching for alarms, timers, weather, and light toggles.
@@ -44,19 +56,27 @@ omnihub/
 │   ├── database.py            # SQLite database for alarms, timers, preferences
 │   └── services/
 │       ├── ai_router.py       # Multi-tier AI routing (Local SLM -> Hermes LAN)
+│       ├── alarm_service.py   # Background scheduler for morning alarms & TTS
+│       ├── ha_service.py      # Home Assistant REST & virtual state relay
+│       ├── immich_service.py  # Immich photo proxy & timeline ingestion
 │       ├── media_service.py   # Spotify Connect state & transport controls
+│       ├── updater_service.py # GitOps updater, auto-redeploy & DB migrations
 │       ├── voice_pipeline.py  # Piper TTS vocal briefings
 │       └── weather_service.py # Open-Meteo & RainViewer radar caching
 ├── frontend/
 │   ├── css/
 │   │   └── styles.css         # OLED black styles, animations, glassmorphism
 │   ├── js/
-│   │   ├── app.js             # Master frontend coordinator & carousel gestures
-│   │   ├── dock.js            # Android Auto bottom dock & status bar
+│   │   ├── app.js             # Master frontend coordinator & audio synthesizer
+│   │   ├── aquarium.js        # Living reef fishtank physics, AI & feeding
+│   │   ├── livemap.js         # 100-mile living map with Doppler radar loops
 │   │   ├── media.js           # Spotify Connect controller & progress bar
-│   │   ├── screensaver.js     # Immich photo frame & automatic contrast engine
-│   │   └── weather.js         # Weather station & radar frame updates
+│   │   ├── screensaver.js     # Screensaver mode coordinator & contrast engine
+│   │   ├── sky.js             # Atmosphere & daylight simulation
+│   │   └── weather.js         # Weather station & inbound storm alerts
 │   └── index.html             # Kiosk application interface
+├── tests/
+│   └── test_omnihub.py        # Automated test suite for DB, services, & AI router
 ├── data/                      # Local SQLite database and log output (GIT IGNORED)
 │   ├── omnihub.db             # Active user database
 │   ├── config.json            # User credentials & hardware config
